@@ -620,25 +620,12 @@ def draw_talents(pool, scenario_tag, mode_tag, n=3):
     return chosen
 
 # ============================================================
-# 派生属性等级
+# 派生属性等级 (基于 100 制)
 # ============================================================
-ASSET_TIERS = [
-    (-5, "负债累累"), (2, "身无分文"), (5, "贫穷"), (10, "小康"),
-    (20, "中产"), (50, "富裕"), (float('inf'), "天龙人"),
-]
-FAME_TIERS = [
-    (-10, "恶名昭著"), (-1, "小有恶名"), (10, "默默无闻"),
-    (20, "小有名气"), (50, "扬名在外"), (float('inf'), "四海皆知"),
-]
-KNOWLEDGE_TIERS = [
-    (2, "蒙昧"), (4, "愚钝"), (15, "正常"),
-    (30, "见多识广"), (50, "博古通今"), (float('inf'), "当世大儒"),
-]
-EDU_TIERS = [
-    (1, "丈育"), (4, "基本文盲"), (12, "识文断字"), (15, "等同初中"),
-    (18, "等同高中"), (22, "等同本科"), (25, "等同硕士"), (float('inf'), "等同博士及以上"),
-]
-
+ASSET_TIERS = [(21, "难寻温饱"), (41, "勉强维持"), (61, "正常中产"), (81, "富裕阶层"), (float('inf'), "天龙人！")]
+FAME_TIERS  = [(21, "泯然众人"), (41, "崭露头角"), (61, "小有名气"), (81, "声名大噪"), (float('inf'), "名扬四海")]
+EXPE_TIERS  = [(21, "图样图森破"), (41, "涉世未深"), (61, "茫茫红尘"), (81, "见多识广"), (float('inf'), "沧海桑田")]
+KNOW_TIERS  = [(21, "丈育文盲"), (41, "识文断字"), (61, "高中大学"), (81, "满腹经纶"), (float('inf'), "当世大儒")]
 
 def get_tier(value, tiers):
     for threshold, name in tiers:
@@ -651,120 +638,93 @@ def get_tier(value, tiers):
 # ============================================================
 def build_system_prompt(c):
     talents_text = "\n".join(
-        f"  - 【{RARITY_CONFIG.get(t.get('rarity','common'),{}).get('label','')}】"
-        f"{t['name']}：{t.get('narrative', t.get('desc',''))}"
+        f"  - 【{RARITY_CONFIG.get(t.get('rarity','common'),{}).get('label','')}】{t['name']}：{t.get('narrative', t.get('desc',''))}"
         for t in c["talents"]
     ) or "  （无）"
     attrs = c["final_attributes"]
     attr_text = "  ".join(f"{k}={v}" for k, v in attrs.items())
     extra = f"\n额外设定：{c['extra_info']}" if c.get('extra_info') else ""
-    backstory = (f"\n背景故事：{c['backstory']}" if c.get('backstory')
-                 else "\n背景故事：（请你根据属性自行编排）")
+    backstory = (f"\n背景故事：{c['backstory']}" if c.get('backstory') else "\n背景故事：（请你根据属性自行编排）")
     max_hp = (attrs.get("SIZ", 50) + attrs.get("CON", 50)) // 10
     
-    # --- Check for Edu Block ---
     if c.get("has_compulsory_edu"):
-        edu_block = (
-            "- EDU（受教育程度，年）：\n"
-            "  · **1~18 岁系统会自动每年 +1**（代表正常成长 / 上学），你**不要**主动加 EDU。\n"
-            "  · 但如果某年因重大原因（重病、家变、辍学、战乱、监禁等）影响学业，"
-            "请在 adjustments 中给一个负 EDU（-1 ~ -3），整段 1-18 岁累计扣减系统会限制在 -10 以内。\n"
-            "  · **19 岁及以后 EDU 完全由你掌握**：上大学时 +1/年；研究生 +1/年；提前毕业、辍学、重读等都自由发挥。"
-        )
+        edu_block = "  · 义务教育环境：系统将在 1~18 岁自动进行高强度的 KNOW 检定与学习。除非出现重大变故，否则不要插手干预。"
     else:
-        edu_block = (
-            "- EDU（受教育/修为/历练）：\n"
-            "  · 该世界没有义务教育制度, EDU 不会自动增长，**完全由你掌握**。\n"
-            "  · 你可以把 EDU 理解为角色的历练程度——拜师、开蒙、读书、闯荡、传授等剧情都可以给正向 EDU。\n"
-            "  · 懒散、错过机缘、被废修为、被禁锢等可以给负向 EDU。\n"
-            "  · 等级显示参考：1=蒙昧 6=学龄前/略识字 12=小学/识文断字 15=初中 18=高中/秀才 22=本科/举人 25=硕士/进士 25+=博士及以上/翰林。"
-        )
+        edu_block = "  · 无义务教育：知识全靠自学、奇遇、家族传授。AI 可在角色拜师、获赠秘籍等情节中给予奖励检定。"
+
+    fast_block = "\n【⚡快速模式】游戏将在 40 岁结束，请安排高潮与收束。" if c.get("fast_mode") else ""
         
-    # --- Check for Fast Mode ---
-    fast_block = ""
-    if c.get("fast_mode"):
-        fast_block = (
-            "\n【⚡快速模式】游戏将在角色 40 岁时结束，"
-            "请在剧情节奏上让 0~40 岁的人生密度合理（前期成长、中期高潮）。"
-        )
-        
-    # --- Check for Skill Check Mode (MOVED HERE) ---
     if c.get("skill_checks_enabled", True):
-        # Assuming ATTRIBUTES is defined globally (e.g., ATTRIBUTES = ["STR", "CON", ...])
-        # If it's not, you can replace the {', '.join(...)} block with hardcoded stats.
         skill_block = f"""
-【🎲 鉴定系统（重要选择由骰子决定）】
-本游戏中，**有失败可能的选择**由程序投 1d100 vs 属性来判定，**你不再决定胜负**。
-- 你给出的每个选项可以包含两个可选字段：`checks` 和 `difficulty`。
-- checks: 1-2 个属性键（STR, CON, POW, DEX, APP, SIZ, INT, CRE, LUCK）。
-- difficulty: "easy" / "normal" / "hard"。
-  · easy   = 双骰取优（更容易过）
-  · normal = 单骰
-  · hard   = 双骰取劣（极难，**只用在真正棘手的情境**）
-- 如果选项是纯偏好选择（比如"选什么大学专业"），省略 checks（设为 []）或不写。
-- 一次给玩家的 3 个选项里，建议 1-2 个有 checks、1 个左右是纯偏好。
-- 鉴定本身已代表"有难度的事"，hard 必须节制使用。
-- 程序投完后会发回"完胜/险胜/完败"，你**只负责按结果写故事**。
+【🎲检定系统（重要选择由骰子决定）】
+本游戏中，有失败可能的选择由程序投骰判定，你不再决定胜负。
+- 你可以要求判定这 12 个属性：STR, CON, POW, DEX, APP, SIZ, INT, CRE, LUCK, ASSET, FAME, EXPE, KNOW。
+- choices.checks 填 1 和少数情况下最多 2 个属性键，difficulty 填 "easy"/"normal"/"hard"。
+- 纯偏好选择不填 checks。
+- 不困难的行动也不填checks。
+- 你不需要每次都输出各一个easy/normal/hard。记住你首先需要保证代入感而不是做一个无情的鉴定机器。
+- 记住checks本身就代表这个行为有一定难度。作为参考：
+主角决定晚上去找某个人- no check
+主角决定和某个人在正常的情况下搭话 - no check
+深夜的房子安静无声，主角将耳朵贴在门上。（因为环境安静）- easy DEX + INT
+主角需要翻过一堵约两米高的砖墙，墙面有些凸起的砖块可作为支撑点，但下着小雨略显湿滑。- normal DEX
+主角试图说服旅馆老板透露昨晚那位神秘客人的房间号，对方有些警惕但并非完全敌对。- normal APP
+对面坐着的是一位老练的政客，他面带微笑、语气平和，每一句话都滴水不漏。主角想要看穿他背后的意图- hard INT
 """
     else:
-        skill_block = """
-【🎭 无鉴定模式】
-本局游戏不使用骰子鉴定。所有选择的结果由你根据角色属性、天赋和故事逻辑自行决定。
-请在叙事中自然地赋予成功或失败，保持故事的戏剧性。
-"""
+        skill_block = "\n【🎭 无检定模式】\n本局不使用骰子，成败由你根据逻辑与剧情需要自行决定。\n"
     
-    # Now, return the compiled prompt
-    return f"""你是"AI人生重开手账"游戏的叙事AI。你需要根据角色设定和属性推演ta的人生事件，生动、有戏剧性地讲述每一年发生的故事。
-    
+    return f"""你是"AI人生重开手账"游戏的叙事AI。你需要根据角色设定和属性推演ta的人生事件，生动、有戏剧性地讲述故事。
 【世界设定】
 {c['scene_name']}：{c['scene_desc']}
 【角色基本信息】
 性别：{c['gender']}　种族：{c['race']}{extra}{backstory}
-【角色出生时属性（已锁定，不可改动）】
+【角色出生属性】
 {attr_text}
-最大生命值 HP_MAX = (SIZ + CON) // 10 = {max_hp}
+最大生命 HP_MAX = {max_hp}
 【天赋】
-{talents_text}
-{fast_block}
-【⛔ 严格规则——基础属性已锁定】
-- STR/CON/POW/DEX/APP/SIZ/INT/CRE/LUCK 这些**基础属性出生时就已固定**，**除非是惊人的其余，否则不应改动它们**。
-- 基础属性代表的是该角色在同龄人中的相对水平。50为普普通通，30为常规意义下的最差（通过特质可以跌破30，那就是出奇的差），70以上为常规意义上的极好，90+（通过特质达到）就是超凡脱俗。
-- 作为确认补充："STR": "肌肉强度，影响体力劳动、战斗力。",
-    "CON": "身体素质，影响耐病、耐疲劳。",
-    "POW": "意志力，影响精神抗性、专注力。",
-    "DEX": "敏捷度，影响反应、灵巧度。",
-    "APP": "外貌，影响第一印象、社交。",
-    "SIZ": "体型，影响存在感、力量与生命。",
-    "INT": "智力，影响学习与思辨。",
-    "CRE": "家境，与角色自身财富无关，AI 据此判定起点。",
-- adjustments 中几乎不会出现这些键。一生可能会有一次或两次改变。
-- 你能改的只有：HP / ASSET / FAME / KNOWLEDGE / EDU。
-【❤️ HP】
-- HP_MAX = (SIZ + CON) // 10 = {max_hp}。系统每年自然恢复 1 HP。
-- 普通感冒 0~-1，重感冒/小事故 -1~-2，重病/重伤 -3~-5，濒死/重大灾难 -5~-10。
-- HP ≤ 0 即死亡；突发意外死亡也可直接 alive=false。
-【其他派生】
-- ASSET、FAME、KNOWLEDGE 整数变化。FAME如果为负则代表恶名远扬，为正则代表好名声。如果什么都不做的话FAME需要控制在-2-2之间。同时每一点大约等于在正常情况下，普通人全身心投入这方面一年之后的成果。（例如，普通人花一整年攒钱就只等于ASSET+1，花一整年学习等于EDU+1）
-- KNOWLEDGE和EDU的区别在于一个是综合经验和学识，一个是学术成就。
+{talents_text}{fast_block}
+【⛔ 规则：核心属性与派生属性（基于 1-100 制）】
+- 核心八大属性出生即固定。
+- 派生浮动属性包含：ASSET(资产)、FAME(名气)、EXPE(经验阅历)、KNOW(学术知识)。
+- 你可以且应当让这些派生属性参与 choices 里的行动检定（如让玩家用 ASSET 去买通别人）。
 {edu_block}
-【叙事】
-1. 事件要符合属性、天赋、家境、世界观。
-2. 当天赋给出的背景和属性冲突时，以属性为准，但要在背景中找补。（e.g. 天赋是家庭富裕但实际CRE只有30？你出生的时候家里破产了。）
-3. has_choice 大约每5-8年一次重要决定。给出的三个选择要利用到角色的不同属性（但不要明说）。同时特别重要的剧情节点可以适当采用同年多次has_choice的做法以确保剧情合理，但谨慎使用此功能。
-4. narrative 不要包含"第X年"前缀。
-{skill_block}
+- **严禁直接加派生属性！** 如果玩家因为剧情需要提升，请在 adjustments 里加上后缀 `_GROWTH` 给予“成长检定次数”。
+  例如：爆出大新闻，你输出 `"FAME_GROWTH": 2`（代表发 2 次成长骰）。学徒期结束，输出 `"KNOW_GROWTH": 1`。
+- **直接扣减是允许的**：如果玩家破产，你可以输出 `"ASSET": -20`。如果身败名裂，输出 `"FAME": -15`。（系统会根据下限防猝死机制自动削弱扣除量）。
+【❤️ HP】
+- HP_MAX = {max_hp}。每年自然恢复 1 HP。
+- 疾病、意外等可造成 -1 到 -5 不等，HP ≤ 0 即死亡。
 【输出格式】（严格 JSON，只输出 JSON）
 {{
   "narrative": "本年事件描述（一句话到 300 字之间）",
   "has_choice": false,
   "choices": {{
-    "A": {{"text": "选项A描述", "checks": ["STR"], "difficulty": "normal"}},
-    "B": {{"text": "选项B描述", "checks": ["INT","POW"], "difficulty": "hard"}},
-    "C": {{"text": "选项C描述（纯偏好选择）", "checks": [], "difficulty": null}}
+    "A": {{"text": "Lorem Ipsum", "checks": ["ASSET"], "difficulty": ""}},
+    "B": {{"text": "Lorem Ipsum", "checks": ["INT","EXPE"], "difficulty": "easy"}}
+    "C": {{"text": "Lorem Ipsum", "checks": ["STR"], "difficulty": "easy"}}
   }},
-  "adjustments": {{"HP": -2, "ASSET": 1, "FAME": -3, "KNOWLEDGE": 1, "EDU": -1}},
+  "adjustments": {{"HP": -2, "FAME_GROWTH": 1, "ASSET": -10}},
   "alive": true,
   "cause_of_death": null
+}}
+"""
+
+def build_action_check_prompt(c, action_text):
+    return f"""玩家想在当前时间点主动做一件事。你只需要判断需要哪些属性鉴定。
+玩家行动：{action_text}
+可用属性：STR, CON, POW, DEX, APP, SIZ, INT, CRE, LUCK, ASSET, FAME, EXPE, KNOW
+
+判定原则：
+- 简单的小事 → 1 个属性，难度 easy。
+- 一般行动 → 1 个属性，难度 normal。
+- 涉及多种能力或极困难的事 → 2 个属性，难度 hard。
+- 纯偏好选择 → checks: []。
+严格只返回 JSON：
+{{
+  "checks": ["ASSET"],
+  "difficulty": "normal",
+  "reasoning": "一句话理由"
 }}
 """
 
@@ -829,39 +789,12 @@ TIME_CONFIG = {
 }
 
 TRACKERS = {
-    "assets": {
-        "label": "资产",
-        "adjustment_key": "ASSET",
-        "initial": 0,
-        "tiers": ASSET_TIERS,
-        "unlock_age": 12,
-        "locked_text": "（未解锁）",
-    },
-    "fame": {
-        "label": "名气",
-        "adjustment_key": "FAME",
-        "initial": 0,
-        "tiers": FAME_TIERS,
-    },
-    "knowledge": {
-        "label": "知识",
-        "adjustment_key": "KNOWLEDGE",
-        "initial": 0,
-        "tiers": KNOWLEDGE_TIERS,
-        "unlock_age": 4,
-        "locked_text": "（未解锁）",
-    },
-    "edu": {
-        "label": "学历",
-        "adjustment_key": "EDU",
-        "initial": 0,
-        "tiers": EDU_TIERS,
-    },
+    "assets": {"label": "资产", "adjustment_key": "ASSET", "initial": 1, "tiers": ASSET_TIERS, "unlock_age": 4, "locked_text": "（未成年）"},
+    "fame":   {"label": "名声", "adjustment_key": "FAME", "initial": 10, "tiers": FAME_TIERS},
+    "expe":   {"label": "经验", "adjustment_key": "EXPE", "initial": 1, "tiers": EXPE_TIERS, "unlock_age": 4, "locked_text": "（未成年）"},
+    "know":   {"label": "知识", "adjustment_key": "KNOW", "initial": 1, "tiers": KNOW_TIERS},
 }
 
-EDU_AUTO_START_AGE = 1
-EDU_AUTO_END_AGE = 18
-EDU_DEDUCT_CAP = 10
 
 
 def get_time_config(c):
@@ -926,65 +859,181 @@ def calculate_max_hp(final_attributes):
     return max(1, (final_attributes.get("SIZ", 50) + final_attributes.get("CON", 50)) // 10)
 
 
-def apply_turn_start_effects(c):
-    """
-    Called once at the beginning of each timestamp.
-    Returns a list of short log strings.
-    """
-    logs = []
+# ============================================================
+# COC 浮动属性自动成长引擎
+# ============================================================
 
-    # HP natural recovery
+def _check(stat): return random.randint(1, 100) <= stat
+def _growth_check(val): return val < 100 and random.randint(1, 100) > val
+def _penalty_check(stat): return max(random.randint(1, 100), random.randint(1, 100)) <= stat
+def _bonus_check(stat): return min(random.randint(1, 100), random.randint(1, 100)) <= stat
+
+def init_trackers(c):
+    for key, cfg in TRACKERS.items():
+        c[key] = cfg.get("initial", 1)
+
+def apply_turn_start_effects(c):
+    logs = []
+    
+    # 1. HP 回复
     if c.get("hp", 0) < c.get("max_hp", 0):
         old = c["hp"]
         c["hp"] = min(c["max_hp"], c["hp"] + 1)
         if c["hp"] != old:
             logs.append(f"❤️HP +{c['hp'] - old}")
 
-    # Compulsory education auto +1
+    # 2. 获取当前年龄与核心属性
     age = int(get_character_age(c))
-    if c.get("has_compulsory_edu") and EDU_AUTO_START_AGE <= age <= EDU_AUTO_END_AGE:
-        c["edu"] = c.get("edu", 0) + 1
-        logs.append("学历 +1")
+    cre = c.get("final_attributes", {}).get("CRE", 50)
+    int_stat = c.get("final_attributes", {}).get("INT", 50)
+    has_compulsory = c.get("has_compulsory_edu", True)
+    
+    # 3. 1~18 岁自动环境成长
+    if 1 <= age <= 18:
+        # --- ASSET (4-18岁) ---
+        if age >= 4:
+            if _check(cre) and _growth_check(c.get("assets", 1)):
+                gain = roll_dice("1d8")
+                c["assets"] = min(100, c.get("assets", 1) + gain)
+                logs.append(f"资产自然积累 +{gain}")
+                
+        # --- EXPE (4-18岁) ---
+        if age >= 4:
+            if _check(int_stat):
+                c["expe"] = min(100, c.get("expe", 1) + roll_dice("1d4"))
+                if _growth_check(c["expe"]):
+                    gain = roll_dice("1d4")
+                    c["expe"] = min(100, c["expe"] + gain)
+                    logs.append(f"阅历见长 +{gain}")
+                    
+        # --- KNOW (学龄前 2-8岁保底) ---
+        if 2 <= age <= 8:
+            passed_cre = False
+            if age in [2, 3]: passed_cre = _penalty_check(cre)
+            elif age in [4, 5]: passed_cre = _check(cre)
+            elif 6 <= age <= 8: passed_cre = _bonus_check(cre)
+            
+            if passed_cre and _growth_check(c.get("know", 1)):
+                gain = roll_dice("1d6")
+                if _check(int_stat): gain += roll_dice("1d6")
+                c["know"] = min(100, c.get("know", 1) + gain)
+                logs.append(f"启蒙家教 +{gain}")
+                
+        # --- KNOW (学龄期 9-18岁) ---
+        if 9 <= age <= 18:
+            if has_compulsory:
+                if _growth_check(c.get("know", 1)):
+                    gain = roll_dice("2d2")
+                    if _check(int_stat): gain += roll_dice("1d6")
+                    if _check(cre): gain += roll_dice("1d2")
+                    c["know"] = min(100, c.get("know", 1) + gain)
+                    logs.append(f"义务教育 +{gain}")
+            else:
+                if _check(cre):
+                    if _growth_check(c.get("know", 1)):
+                        gain = roll_dice("1d6")
+                        if _check(int_stat): gain += roll_dice("1d4")
+                        c["know"] = min(100, c.get("know", 1) + gain)
+                        logs.append(f"家族/私塾教育 +{gain}")
+                elif _penalty_check(int_stat):
+                    if _growth_check(c.get("know", 1)):
+                        gain = roll_dice("1d4")
+                        c["know"] = min(100, c.get("know", 1) + gain)
+                        logs.append(f"自学成才 +{gain}")
 
     return logs
 
 
 def apply_tracker_adjustment(c, adjustment_key, value):
     """
-    Applies non-HP tracker adjustment.
-    Returns display log string or None.
+    处理 AI 给的变动。支持 _GROWTH (给予检定次数) 和负数直接扣除 (带减伤机制)
     """
     value = int(value)
+    
+    # 1. 检查是否是 GROWTH 检定奖励
+    if adjustment_key.endswith("_GROWTH"):
+        base_key = adjustment_key.replace("_GROWTH", "")
+        tracker_key, cfg = None, None
+        
+        for tk, cf in TRACKERS.items():
+            if cf.get("adjustment_key") == base_key:
+                tracker_key, cfg = tk, cf
+                break
+                
+        if not tracker_key:
+            return None
+            
+        total_gain = 0
+        for _ in range(max(1, value)):
+            if _growth_check(c.get(tracker_key, 1)):
+                total_gain += roll_dice("1d6")
+                
+        if total_gain > 0:
+            c[tracker_key] = min(100, c.get(tracker_key, 1) + total_gain)
+            return f"{cfg['label']}突破 +{total_gain}"
+        else:
+            return f"{cfg['label']}毫无长进"
 
+    # 2. 正常数值操作（处理扣减和偶尔的发癫加分）
     for tracker_key, cfg in TRACKERS.items():
         if cfg.get("adjustment_key") != adjustment_key:
             continue
-
-        # EDU special protection during compulsory education years
-        if tracker_key == "edu":
-            age = int(get_character_age(c))
-            if value < 0 and c.get("has_compulsory_edu") and EDU_AUTO_START_AGE <= age <= EDU_AUTO_END_AGE:
-                remaining_cap = EDU_DEDUCT_CAP - c.get("edu_disrupted", 0)
-                actual = max(value, -remaining_cap)
-                if actual == 0:
-                    return None
-                c[tracker_key] = c.get(tracker_key, 0) + actual
-                c["edu_disrupted"] = c.get("edu_disrupted", 0) + (-actual)
-                return f"{cfg['label']} {actual:+d}"
-
-        c[tracker_key] = c.get(tracker_key, 0) + value
-        return f"{cfg['label']} {value:+d}"
-
+            
+        old = c.get(tracker_key, cfg.get("initial", 1))
+        
+        if value < 0:
+            # 扣除减伤机制：35 以下除以 2，15 以下除以 5。
+            deduction = abs(value)
+            if old <= 15:
+                deduction = max(1, deduction // 5)
+            elif old <= 35:
+                deduction = max(1, deduction // 2)
+                
+            new = max(1, old - deduction) # 保底为 1
+        else:
+            # 兼容：如果 AI 没看懂提示词非要硬塞正数，那也让它加（上限100）
+            new = min(100, old + value)
+            
+        actual = new - old
+        if actual == 0:
+            return None
+            
+        c[tracker_key] = new
+        return f"{cfg['label']} {actual:+d}"
+        
     return None
 # ============================================================
-# 共享鉴定系统（所有模式都用同一套）
+# 共享检定系统（所有模式都用同一套）
 # ============================================================
 
 def perform_skill_check(c, attr_name, difficulty="normal", advantage_override=None):
-    """1d100 vs 属性。"""
+    """1d100 vs 属性/派生属性。"""
     attrs = c.get("final_attributes", {})
-    attr_value = attrs.get(attr_name, 50)
 
+    # ==== 查找属性值的核心逻辑 ====
+    if attr_name in attrs:
+        # 1. 如果是基础的 8 大属性
+        attr_value = attrs[attr_name]
+    elif attr_name == "LUCK":
+        # 2. 如果是幸运
+        attr_value = c.get("luck", 50)
+    else:
+        # 3. 如果是浮动派生属性 (Float attributes like MYSTERY, REPUTATION, etc.)
+        # 将大写的键名转为字典里实际存的小写名
+        mapping = {
+            "ASSET": "assets",
+            "MYSTERY": "mystery",
+            "REPUTATION": "reputation",
+            "INTEGRITY": "integrity",
+            "HEAT": "heat",
+            "FAME": "fame",
+            "EXPE": "expe",
+            "KNOW": "know"
+        }
+        actual_key = mapping.get(attr_name, attr_name.lower())
+        attr_value = c.get(actual_key, 50) # 找不到的话兜底给50
+
+    # ==== 骰子检定逻辑 ====
     if advantage_override == "advantage":
         rule = "advantage"
     elif advantage_override == "disadvantage":
@@ -1010,14 +1059,22 @@ def perform_skill_check(c, attr_name, difficulty="normal", advantage_override=No
 
     growth = 0
     if success:
-        gain = roll_dice("1d6")
-        if attr_value >= 90:
-            gain = 0
-        elif attr_value >= 70:
-            gain = max(1, gain // 3)
-        elif attr_value >= 50:
-            gain = max(1, gain // 2)
-        growth = gain
+        # ===== COC 风格技能成长判定 =====
+        if attr_value >= 85:
+            growth_roll = min(random.randint(1, 100), random.randint(1, 100))
+        else:
+            growth_roll = random.randint(1, 100)
+
+        # 判定失败才能获得成长
+        if growth_roll >= attr_value:
+            gain = roll_dice("1d6")
+            if attr_value >= 90:
+                gain = max(1, gain // 3)
+            elif attr_value >= 70:
+                gain = max(1, gain // 3)
+            elif attr_value >= 50:
+                gain = max(1, gain // 2)
+            growth = gain
 
     return {
         "attribute": attr_name,
@@ -1029,7 +1086,6 @@ def perform_skill_check(c, attr_name, difficulty="normal", advantage_override=No
         "growth": growth,
     }
 
-
 def apply_skill_check_growth(c, check_result, locked_attrs=None):
     if not check_result.get("success"):
         return None
@@ -1039,8 +1095,10 @@ def apply_skill_check_growth(c, check_result, locked_attrs=None):
     attr = check_result["attribute"]
     if locked_attrs and attr in locked_attrs:
         return None
+    
     attrs = c.setdefault("final_attributes", {})
-    attrs[attr] = min(99, attrs.get(attr, 50) + g)
+    # 原本锁定 99 为上限，这里改成 100 匹配 "几乎不可能到 100" 的说法
+    attrs[attr] = min(100, attrs.get(attr, 50) + g)
     return f"{attr} +{g}"
 
 
@@ -1060,14 +1118,14 @@ def format_check_log(check_result):
                "normal": ""}[check_result["rule"]]
     rolls_text = "+".join(str(x) for x in check_result["rolls"])
     mark = "✅" if check_result["success"] else "❌"
-    return (f"🎲 {check_result['attribute']} 鉴定 {check_result['value']} "
+    return (f"🎲 {check_result['attribute']} 检定 {check_result['value']} "
             f"vs [{rolls_text}]{rule_zh} 取 {check_result['kept']} {mark}")
 
 
 def build_action_check_prompt(c, action_text):
     """普通模式版本：用 STR/CON/POW/DEX/APP/SIZ/INT/CRE/LUCK。"""
     attrs_text = "、".join(ATTRIBUTES + ["LUCK"])
-    return f"""玩家想在当前时间点主动做一件事。你只需要判断需要哪些属性鉴定。
+    return f"""玩家想在当前时间点主动做一件事。你只需要判断需要哪些属性检定。
 玩家行动：{action_text}
 可用属性：{attrs_text}
 
@@ -1076,7 +1134,7 @@ def build_action_check_prompt(c, action_text):
 - 一般行动 → 1 个属性，难度 normal。
 - 涉及多种能力或非常困难的事 → 2 个属性，难度 normal 或 hard。
 - 如果是纯偏好/无失败可能（比如"选择主修文学还是数学"）→ checks: []。
-- "鉴定"本身已代表事情有难度，**只在真正棘手时用 hard**。
+- "检定"本身已代表事情有难度，**只在真正棘手时用 hard**。
 
 严格只返回如下 JSON：
 {{
@@ -1098,21 +1156,21 @@ def build_resolution_prompt(c, action_summary, check_results, **kwargs):
                    "normal": ""}[r["rule"]]
         rolls_text = "+".join(str(x) for x in r["rolls"])
         mark = "✅成功" if r["success"] else "❌失败"
-        lines.append(f"  - {r['attribute']} 鉴定（属性值 {r['value']}）{rule_zh}："
+        lines.append(f"  - {r['attribute']} 检定（属性值 {r['value']}）{rule_zh}："
                      f"投出 [{rolls_text}]，采用 {r['kept']} → {mark}")
     check_text = "\n".join(lines)
 
     overall_zh = {
-        "full_success": "完胜（所有鉴定都通过）",
-        "partial_success": "险胜（有部分鉴定失败，必须付出代价才能办成）",
-        "full_failure": "完败（鉴定都失败）",
+        "full_success": "完胜（所有检定都通过）",
+        "partial_success": "险胜（有部分检定失败，必须付出代价才能办成）",
+        "full_failure": "完败（检定都失败）",
     }[overall]
 
     extra_context = kwargs.get("extra_context", "")
 
     return f"""玩家这一次的行动是：{action_summary}
 
-【鉴定结果】
+【检定结果】
 {check_text}
 
 【综合判定】{overall_zh}

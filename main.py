@@ -1,3 +1,44 @@
+"""
+Creative Commons Legal Code
+CC0 1.0 Universal
+
+    CREATIVE COMMONS CORPORATION IS NOT A LAW FIRM AND DOES NOT PROVIDE
+    LEGAL SERVICES. DISTRIBUTION OF THIS DOCUMENT DOES NOT CREATE AN
+    ATTORNEY-CLIENT RELATIONSHIP. CREATIVE COMMONS PROVIDES THIS
+    INFORMATION ON AN "AS-IS" BASIS. CREATIVE COMMONS MAKES NO WARRANTIES
+    REGARDING THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS
+    PROVIDED HEREUNDER, AND DISCLAIMS LIABILITY FOR DAMAGES RESULTING FROM
+    THE USE OF THIS DOCUMENT OR THE INFORMATION OR WORKS PROVIDED
+    HEREUNDER.
+
+Statement of Purpose
+
+The laws of most jurisdictions throughout the world automatically confer
+exclusive Copyright and Related Rights (defined below) upon the creator
+and subsequent owner(s) (each and all, an "owner") of an original work of
+authorship and/or a database (each, a "Work").
+
+Certain owners wish to permanently relinquish those rights to a Work for
+the purpose of contributing to a commons of creative, cultural and
+scientific works ("Commons") that the public can reliably and without fear
+of later claims of infringement build upon, modify, incorporate in other
+works, reuse and redistribute as freely as possible in any form whatsoever
+and for any purposes, including without limitation commercial purposes.
+These owners may contribute to the Commons to promote the ideal of a free
+culture and the further production of creative, cultural and scientific
+works, or to gain reputation or greater distribution for their Work in
+part through the use and efforts of others.
+
+For these and/or other purposes and motivations, and without any
+expectation of additional consideration or compensation, the person
+associating CC0 with a Work (the "Affirmer"), to the extent that he or she
+is an owner of Copyright and Related Rights in the Work, voluntarily
+elects to apply CC0 to the Work and publicly distribute the Work under its
+terms, with knowledge of his or her Copyright and Related Rights in the
+Work and the meaning and intended legal effect of CC0 on those rights.
+"""
+
+
 # main.py
 import threading
 import random
@@ -11,10 +52,11 @@ import data as normal_data
 import hornidata
 import storedata
 import finedata
+import sv_ttk
 
 from data import (
     SCENES, GENDERS, RARITY_CONFIG,
-    ASSET_TIERS, FAME_TIERS, KNOWLEDGE_TIERS, EDU_TIERS,
+    ASSET_TIERS, FAME_TIERS, EXPE_TIERS, KNOW_TIERS,
     get_tier, roll_dice, parse_ai_json,
     load_config, save_config, clear_config,
     MODE_TEST, MODE_IRONMAN,
@@ -27,7 +69,7 @@ from storedata import (
     init_store_state,
 )
 
-VERSION = "v0.6.2 BANYAN"
+VERSION = "v0.7.1.1 MAGNOLIA"
 
 TALENT_USER_PATH = os.path.join(os.path.expanduser("~"), ".ai_life_remake_talents.json")
 
@@ -308,7 +350,8 @@ class TalentEditor(tk.Toplevel):
         ("negative", "负面"), ("common", "普通"),
         ("rare", "稀有"), ("legendary", "传奇"), ("wildcard", "特殊"),
     ]
-    MODE_OPTIONS = [("Normal", "普通"), ("Horni", "性压抑")]
+    #MODE_OPTIONS = [("Normal", "普通"), ("Horni", "性压抑")]
+    MODE_OPTIONS = [("Normal", "普通"), ("store", "通马桶模式")]
 
     def __init__(self, parent, app):
         super().__init__(parent)
@@ -330,6 +373,7 @@ class TalentEditor(tk.Toplevel):
 
         self._build()
         self._reset_form()
+        self._refresh_list()
 
     def _build(self):
         header = tk.Frame(self, bg=COLORS["bg"])
@@ -464,7 +508,7 @@ class TalentEditor(tk.Toplevel):
         row.pack(fill="x", pady=2)
 
         attrs_all = ["STR", "CON", "POW", "DEX", "APP", "SIZ", "INT", "CRE", "LUCK",
-                     "LIB", "TEC", "END", "SEN", "LOV", "EXP"]
+                     "LIB", "TEC", "END", "SEN", "LOV", "EXP", "HMR"]
 
         attr_var = tk.StringVar(value=attr)
         ttk.Combobox(row, textvariable=attr_var, values=attrs_all,
@@ -683,12 +727,13 @@ class GlobalPromptEditor(tk.Toplevel):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(f"AI人生重开手账 {VERSION}")
+        self.title(f"AI人生模拟器 {VERSION}")
         self._auto_size_window()
         self.minsize(560, 640)
         self.resizable(True, True)
-        self.configure(bg=COLORS["bg"])
-        apply_style(self)
+        #self.configure(bg=COLORS["bg"])
+        #apply_style(self)
+        sv_ttk.set_theme("light")
 
         self.app_state = {"client": None, "model": None, "connected": False}
         self.disclaimer_accepted = False
@@ -741,8 +786,8 @@ class App(tk.Tk):
 
     def fine_initial_points(self):
         """
-        Fine Mode starting tracker points.
-        1 point per full starting age year.
+        Fine Mode: 18岁以后，每 1 岁获得 1 次自由成长检定。
+        如果 start_age < 18，返回 0，跳过分配页面。
         """
         c = self.character
         if not c.get("fine_enabled"):
@@ -754,7 +799,7 @@ class App(tk.Tk):
         except Exception:
             start_age = 0
 
-        return max(0, int(start_age))
+        return max(0, int(start_age) - 18)
 
     def configure_fine_mode(self, enabled, start_age=0, end_age=80, timestamp="year"):
         """
@@ -1093,7 +1138,6 @@ class TopBar(tk.Frame):
 # ============================================================
 # 0. Disclaimer
 # ============================================================
-
 class DisclaimerPage(tk.Frame):
     def __init__(self, parent, app):
         super().__init__(parent, bg=COLORS["bg"])
@@ -1128,45 +1172,32 @@ class DisclaimerPage(tk.Frame):
             font=F_HEAD,
         ).pack(anchor="w", padx=24, pady=(20, 10))
 
-        text = (
-            "本程序是部分参考 https://re.maa-ai.com/ 的精神本地版,目标是允许你选择不同的 AI 写作模型和增加一些创作自由度。\n\n"
+        # ============ 1. 免责声明正文 ============
+        disclaimer_text = (
+            "本程序是部分参考 https://re.maa-ai.com/ 的精神本地版，作者参考了大致的架构并加入了很多自己想要的功能。\n\n"
+            "本程序的用户（以下简称你）可以通过切换不同的API来达到使用不同LLM来玩的效果。同时，本程序加入了更多的用户编辑功能。\n\n"
             "这个小程序会需要你填入你的 API 密钥，这是很重要的东西。\n\n"
-            "因为这个程序本身没有高强度的安全防护，而且开放了很多用户编辑自由度，进行恶意修改再重新传播相当简单。如果你无法确认这个程序的来源，请仔细辨别你收到的这一份是否有被恶意修改。\n\n"
+            "因为这个程序本身基本没有安全防护，而且开放了很多用户编辑自由度，进行恶意修改再重新传播相当简单。请仔细辨别你收到的这一份是否有被恶意修改。\n\n"
+            "如果你无法确认这个程序的来源，作者建议你跑一遍杀毒软件或virustotal。（但真的藏有小巧思的话你看到这句话时已经迟了喵。）\n\n"
             "无论如何，作者强烈建议你重新创建一个新的、有消费限制的 API。\n\n"
-            "本程序完全免费。如果你花了钱，你被坑了。。\n\n"
+            "如果你不知道怎么设置 API 限额，建议不要使用此程序。\n\n"
+            "本程序本体完全免费。如果你花了钱，恭喜你被坑了。（API自费）\n\n"
             "本程序为玩具，作者不对任何因使用本程序导致的损失负责。\n\n"
-            "本程序目标用户为心智完善、情绪稳定的成年人。请确认你是这样的正常成年人。\n\n"
-            f"{VERSION} 更新：\n"
-            "- 修复了POPLAR更新中骰子功能超出代码定义范围的bug。\n"
-            "- 增加了可以让用户在正常模式中是否启用骰子功能的选择项。\n"
-            "- 添加了针对低级自动爬虫的防护。少量提高安全性。\n\n"
-            "v0.6.1 POPLAR 更新：\n"
-            "- 对所有模式里的选择鉴定都做了CARNATION更新中的成功/失败检定功能适配。\n"
-            "- 小幅上调所有模式中的自由属性点至180点。\n"
-            "- 完善了通马桶模式的技术细节。\n"
-            "- 对四个情景都进行了通马桶模式的天赋池适配。\n\n"
-            "v0.6 CARNATION 更新：\n"
-            "- 增加我要通马桶模式。现在你可以扮演一名神秘npc来接取和解决委托了。\n"
-            "- 修复了主动行动无法实际确认行动的问题。\n"
-            "- 修复了数个其他bug。\n"
-            "- 优化API保存方法为本地加密。少量提高安全性。\n\n"
-            "此致，敬礼！\n"
+            "本程序假设用户为心智完善、情绪稳定的成年人。请确认你是这样的正常成年人。\n\n"
+            "本程序已采用 CC0 1.0 (公有领域贡献) 协议释出。\n"
+            "作者已放弃所有版权，你可以自由复制、修改、分发，均无需征求许可。\n\n\n\n"
+                        "此致，敬礼！\n"
             "               KPV_ZUBT"
-
-            
         )
 
-        lbl = tk.Label(
-            card,
-            text=text,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            font=F_BODY,
-            justify="left",
+        disc_lbl = tk.Label(
+            card, text=disclaimer_text, bg=COLORS["card"], fg=COLORS["text"],
+            font=F_BODY, justify="left"
         )
-        lbl.pack(anchor="w", fill="x", padx=24, pady=(0, 16))
-        auto_wrap(lbl)
+        disc_lbl.pack(anchor="w", fill="x", padx=24, pady=(0, 16))
+        auto_wrap(disc_lbl)
 
+        # ============ 2. 确认打勾的格子（插在中间） ============
         self.agree_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             card,
@@ -1176,12 +1207,97 @@ class DisclaimerPage(tk.Frame):
             command=self._toggle,
         ).pack(anchor="w", padx=24, pady=(8, 20))
 
+        # ============ 3. 分割线与更新日志 ============
+        ttk.Separator(card, orient="horizontal").pack(fill="x", padx=24, pady=10)
+        
+        tk.Label(
+            card, text="📜 更新日志", bg=COLORS["card"], fg=COLORS["text"], font=F_SUB
+        ).pack(anchor="w", padx=24, pady=(10, 4))
+
+        changelog_text = (
+            f"{VERSION} 更新：\n"
+            "- 健康发行版，删除和隐藏了部分不合适的内容。\n\n"
+            "v0.7.1 BOABAB 更新：\n"  
+            "- 添加了设置自动保存功能。现在许多设置会自动保存了，你下一次打开游戏不需要重新调试一遍。\n"
+            "- 这个功能其实0.7.0就做好了。但是我觉得它太伟大了，不亚于山顶洞人第一次发现石头可以丢。\n"
+            "- 所以我给了它一个专门的版本供在更新日志里面。\n"
+            "- 优化了UI显示，将软件界面从2016年升级到了2018年。\n\n"
+            "v0.7.0 HYACINTH 更新：\n"   
+            "- 正式添加了CC0的协议释出。\n"
+            "- 添加了通过传统派3d6*5骰点来配置属性的功能。此功能可以用于所有模式。\n"
+            "- 添加了高级功能：省token模式。可以降低一些因为上下文产生的消费。\n"
+            "- 添加了高级功能：检查发送给API的内容。方便调试和检查token用量。\n"
+            "- 优化了测试模式，添加无上限选择天赋和无限加自由属性点的功能。\n"
+            "- 优化了微调模式，现在选择起始岁数会自动根据你的基础数值进行1-18岁属性成长的演算。\n"
+            "- 优化了通马桶模式，现在所有的浮动属性都是基于d100并且对游戏有实际影响了。\n"
+            "- 优化了返回报错内容，现在里面包含api的话会自动删除。少量提高安全性。\n"
+            "- 将JUNIPER版本中更新的计算方法适配进了所有模式中。\n"
+            "- 修复了微调模式中“周”的时间单位无法被使用的问题。\n\n"
+            "v0.6.9/0.7.0 pre-patch JUNIPER 更新：\n"   
+            "- 添加了AI返回报错时，可以查看返回内容的选项。\n"
+            "- 重做了所有名声/资产等属性，现在它们都是基于100的可检定属性了。\n"
+            "- 重做了0-18岁的义务教育，资产成长等。现在CRE将会是很重要的属性了。\n"
+            "- 优化API保存方法为keyring加密。少量提高安全性。\n"
+            "- 优化API链接界面。现在勾选“显示key”的时候，中间的六位字符不会被抓取。少量提高安全性。\n"
+            "- 优化API链接界面。可同时保存的api数量减少为两个。\n"
+            "- 修复了第一次打开特质编辑器无法看到已有特质的bug。\n"
+            "- 通马桶模式暂时还没有做d100适配的浮动属性。\n\n"
+            "v0.6.3 MAPLE 更新：\n"   
+            "- 修复了BANYAN版本中主动行动（又）无法实际确认行动的问题。\n"
+            "- 修复了通马桶模式中出现AttributeError的问题。\n\n"
+            "v0.6.2 BANYAN 更新：\n"           
+            "- 添加了可以让用户在正常模式中是否启用骰子功能的选择项。\n"
+            "- 添加了针对低级自动爬虫抓取本地加密密匙的防护。少量提高安全性。\n"
+            "- 修复了POPLAR版本中骰子功能超出代码定义范围的bug。\n"
+            "v0.6.1 POPLAR 更新：\n"
+            "- 对所有模式里的选择检定都做了CARNATION更新中的成功/失败检定功能适配。\n"
+            "- 小幅上调所有模式中的自由属性点至180点。\n"
+            "- 优化了通马桶模式的技术细节。\n"
+            "- 对四个情景都进行了通马桶模式的天赋池适配。\n\n"
+            "v0.6.0 CARNATION 更新：\n"
+            "- 添加了我要通马桶模式。现在你可以扮演一名神秘npc来接取和解决委托了。\n"
+            "- 修复了主动行动无法实际确认行动的问题。\n"
+            "- 修复了数个其他bug。\n"
+            "- 优化api保存方法为本地加密。少量提高安全性。\n\n"
+            "v0.5.5 MANGROVE 更新：\n"
+            "- 添加了自己填写天赋的能力。\n"
+            "- 添加了回合中主动行动的选项。\n"
+            "- api链接QOL优化，现在你可以同时保存三个不同的api了。\n"
+            "- 优化了界面至clamshell，软件年代从1996进化到了2016。\n"
+            "- 修复了AI报错后重试会推进时间线的bug。\n\n"
+            "v0.5.1 OAK 更新：\n"
+            "- 修复了 Fine Mode 配置时间轴错误的 bug。\n"
+            "- 修复了时间刻度显示一直是英文键名的 bug。\n"
+            "- 修复了IdentityPage 的「上一步」会跳到错误页面的 bug。\n\n"
+            "v0.5.0 DANDELION 更新：\n"
+            "- 添加了导入记录功能，配合之前的导出记录功能可以实现保存了。\n"
+            "- 添加了微调模式，现在你可以调整每回合的时间跨度，起始年龄和结束年龄了！\n"
+            "- 铁人模式/测试模式/普通模式现在改为在故事设定之上的调整条件。\n"
+            "- QOL改善和底层代码优化。\n\n"
+            "v0.4.1 ACACIA 更新：\n"
+            "- 修改了天赋系统-从单纯的抽三变为了抽六选三。\n"
+            "- 在一局人生结束之后和游戏进行时都增加了导出记录为.txt的功能。\n"
+            "- 小幅上调了两种模式下的属性点数量。\n"
+            "- 微调了AI给予选项的频率。\n\n"
+            "v0.4.0 TULIP 更新：\n"
+            "- 第一个新架构的版本\n\n\n\n\n\n\n\n\n\n"
+            "我永远喜欢UMP45"
+        )
+
+        log_lbl = tk.Label(
+            card, text=changelog_text, bg=COLORS["card"], fg=COLORS["subtext"],
+            font=F_SMALL, justify="left"
+        )
+        log_lbl.pack(anchor="w", fill="x", padx=24, pady=(0, 20))
+        auto_wrap(log_lbl)
+
     def _toggle(self):
         self.btn_next.config(state="normal" if self.agree_var.get() else "disabled")
 
     def _go(self):
         self.app.disclaimer_accepted = True
         self.app.show_page("APIPage")
+        
 
 
 import os
@@ -1195,73 +1311,31 @@ import os
 import json
 from cryptography.fernet import Fernet
 
-# ============================================================
-# 0. Crypto Helper (Obfuscated Version)
-# ============================================================
-class CryptoHelper:
-    # Camouflage 1: Use a boring, unsuspicious file name
-    KEY_FILE = "game_telemetry.dat"
-
-    @classmethod
-    def _get_or_create_key(cls):
-        if not os.path.exists(cls.KEY_FILE):
-            # Generate the real key
-            real_key = Fernet.generate_key().decode('utf-8')
-            
-            # Camouflage 2: Reverse the key string. 
-            # Fernet keys end with '=', by reversing it, it starts with '='.
-            # This completely breaks automated crawler Regex scanners.
-            reversed_key = real_key[::-1]
-            
-            # Camouflage 3: Hide it inside innocent-looking fake data
-            decoy_data = {
-                "sound_muted": False,
-                "master_volume": 85,
-                "last_played_timestamp": 1698349200,
-                "vsync_enabled": True,
-                "sync_token_v2": reversed_key, # The actual key is hiding here
-                "graphics_quality": "High"
-            }
-            
-            with open(cls.KEY_FILE, "w", encoding="utf-8") as f:
-                json.dump(decoy_data, f, indent=4)
-                
-            return real_key.encode('utf-8')
-        else:
-            try:
-                with open(cls.KEY_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                # Extract and un-reverse the key
-                reversed_key = data.get("sync_token_v2", "")
-                real_key = reversed_key[::-1]
-                return real_key.encode('utf-8')
-            except Exception:
-                # Fallback if the file was corrupted
-                return Fernet.generate_key()
-
-    @classmethod
-    def encrypt(cls, text):
-        if not text:
-            return ""
-        f = Fernet(cls._get_or_create_key())
-        return f.encrypt(text.encode('utf-8')).decode('utf-8')
-
-    @classmethod
-    def decrypt(cls, cipher_text):
-        if not cipher_text:
-            return ""
-        f = Fernet(cls._get_or_create_key())
-        try:
-            return f.decrypt(cipher_text.encode('utf-8')).decode('utf-8')
-        except Exception:
-            # Fallback for plain-text legacy keys from before you added encryption
-            return cipher_text
+import keyring
+import keyring.errors
 
 # ============================================================
-# 1. API
+# 1. API 页面 (使用原生 Keyring 安全存储)
+# ============================================================
+def mask_api_key(key):
+    """安全脱敏函数：隐藏 10~16 位，如果太短则隐藏中间"""
+    if not key:
+        return ""
+    if len(key) > 16:
+        # [:9] 截取前9位 (index 0~8)，[16:] 保留第17位及以后
+        return key[:9] + "••••••" + key[16:]
+    elif len(key) > 6:
+        return key[:3] + "••••••" + key[-3:]
+    else:
+        return "••••••"
+    
+# ============================================================
+# 1. API 页面 (脱敏防护 + 系统原生凭据管理)
 # ============================================================
 class APIPage(tk.Frame):
     NUM_SLOTS = 2
+    KEYRING_SERVICE = "AILifeRemake"
+
     def __init__(self, parent, app):
         super().__init__(parent, bg=COLORS["bg"])
         self.app = app
@@ -1301,34 +1375,34 @@ class APIPage(tk.Frame):
         lbl.pack(anchor="w", fill="x", padx=24, pady=(0, 16))
         auto_wrap(lbl)
         
-        # ---- 加载/迁移配置 ----
+        # ---- 加载配置 ----
         cfg = load_config()
-        
-        # Decrypt legacy top-level key if it exists
-        legacy_key = CryptoHelper.decrypt(cfg.get("api_key", ""))
         
         if "slots" not in cfg:
             cfg["slots"] = [{
                 "base_url": cfg.get("base_url", "https://api.deepseek.com/v1"),
-                "api_key": legacy_key,
                 "model": cfg.get("model", "deepseek-chat"),
             }]
             cfg["active_slot"] = 0
             
         slots = list(cfg.get("slots", []))
         
-        # DECRYPT KEYS FOR UI
-        for slot in slots:
-            slot["api_key"] = CryptoHelper.decrypt(slot.get("api_key", ""))
+        # 从操作系统 Keyring 中读取真实的 API Key 存入内存，UI 栏位只显示打码版
+        self.real_keys = []
+        for i, slot in enumerate(slots):
+            os_key = keyring.get_password(self.KEYRING_SERVICE, f"api_key_slot_{i}")
+            os_key = os_key if os_key else ""
+            self.real_keys.append(os_key)
+            slot["api_key"] = mask_api_key(os_key) # <--- UI 栏只显示这串掩码
             
         while len(slots) < self.NUM_SLOTS:
+            self.real_keys.append("")
             slots.append({
                 "base_url": "https://api.deepseek.com/v1",
                 "api_key": "",
                 "model": "deepseek-chat",
             })
             
-        # ---- 两个槽 (Two based on NUM_SLOTS) ----
         self.slot_widgets = []
         for i in range(self.NUM_SLOTS):
             self.slot_widgets.append(self._build_slot_card(inner, i, slots[i]))
@@ -1340,7 +1414,7 @@ class APIPage(tk.Frame):
         ctl.pack(fill="x", padx=18, pady=12)
         self.remember_var = tk.BooleanVar(value=cfg.get("remember", True))
         ttk.Checkbutton(
-            ctl, text="记住所有 API 配置（加密保存到本机。）", # Text updated
+            ctl, text="记住所有 API 配置（API Key 将通过系统原生凭据管理器加密保存）",
             variable=self.remember_var, style="Card.TCheckbutton",
         ).pack(side="left")
         self.status = tk.Label(
@@ -1381,34 +1455,41 @@ class APIPage(tk.Frame):
         show_var = tk.BooleanVar(value=False)
         
         def toggle_show():
+            # 这里就算点开了显示的也只会是类似 sk-12345••••••789 这种脱敏的 Key
             e_key.config(show="" if show_var.get() else "*")
             
         ttk.Checkbutton(
             f, text="显示 Key", variable=show_var,
             style="Card.TCheckbutton", command=toggle_show,
         ).grid(row=3, column=1, sticky="w", pady=2)
+        
         ttk.Button(
             card, text="测试并启用此 API", style="Primary.TButton",
             command=lambda i=idx: self.test_slot(i),
         ).pack(anchor="e", padx=18, pady=(4, 12))
-        return {"url": e_url, "key": e_key, "model": e_model,
-                "active_label": active_lbl}
+        return {"url": e_url, "key": e_key, "model": e_model, "active_label": active_lbl}
                 
     def test_slot(self, idx):
         sw = self.slot_widgets[idx]
         url = sw["url"].get().strip()
-        key = sw["key"].get().strip()
+        display_key = sw["key"].get().strip()
         model = sw["model"].get().strip()
-        if not (url and key and model):
+        
+        if not (url and display_key and model):
             messagebox.showwarning("提示", f"槽 #{idx + 1} 三个字段都得填好。")
             return
+            
+        # 安全验证：如果输入框里是我们在初始化时填进去的打码 Key，说明没改动，提取真实 Key。
+        # 如果不是，说明用户重新粘贴了新 Key，那就拿新输入的值。
+        actual_key = self.real_keys[idx] if display_key == mask_api_key(self.real_keys[idx]) else display_key
+        
         self._update_active_indicator(None)
         self.status.config(text=f"⏳ 正在测试槽 #{idx + 1}……", fg=COLORS["warning"])
         self.btn_next.config(state="disabled")
         
         def worker():
             try:
-                client = OpenAI(base_url=url, api_key=key)
+                client = OpenAI(base_url=url, api_key=actual_key)
                 r = client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": 'This is a test. Reply with only "1".'}],
@@ -1416,23 +1497,22 @@ class APIPage(tk.Frame):
                 )
                 reply = r.choices[0].message.content.strip()
                 def ok():
+                    self.real_keys[idx] = actual_key # 测试成功，更新内存里的真 Key
                     self.app.app_state.update(client=client, model=model, connected=True)
-                    self.status.config(
-                        text=f"✅ 槽 #{idx + 1} 连接成功！AI 回复：{reply}",
-                        fg=COLORS["success"],
-                    )
+                    self.status.config(text=f"✅ 槽 #{idx + 1} 连接成功！AI 回复：{reply}", fg=COLORS["success"])
                     self.btn_next.config(state="normal")
                     self._update_active_indicator(idx)
                     self._save_config(active=idx)
                 self.after(0, ok)
             except Exception as e:
                 err = str(e)
+                # 终极脱敏：扫描报错文本，如果 OpenAI 库抛出的错误包含真实密钥，将其彻底抹除为打码版
+                if actual_key and actual_key in err:
+                    err = err.replace(actual_key, mask_api_key(actual_key))
+                
                 def fail():
                     self.app.app_state["connected"] = False
-                    self.status.config(
-                        text=f"❌ 槽 #{idx + 1} 失败：{err}",
-                        fg=COLORS["danger"],
-                    )
+                    self.status.config(text=f"❌ 槽 #{idx + 1} 失败：{err}", fg=COLORS["danger"])
                 self.after(0, fail)
         threading.Thread(target=worker, daemon=True).start()
         
@@ -1443,13 +1523,25 @@ class APIPage(tk.Frame):
     def _save_config(self, active=0):
         cfg = load_config() if self.remember_var.get() else {}
         slots = []
-        for sw in self.slot_widgets:
-            raw_key = sw["key"].get().strip()
+        for i, sw in enumerate(self.slot_widgets):
+            display_key = sw["key"].get().strip()
+            # 获取真正的 key 用于存储
+            actual_key = self.real_keys[i] if display_key == mask_api_key(self.real_keys[i]) else display_key
+            
             slots.append({
                 "base_url": sw["url"].get().strip(),
-                "api_key": CryptoHelper.encrypt(raw_key), # ENCRYPT KEY FOR STORAGE
                 "model": sw["model"].get().strip(),
             })
+            
+            if self.remember_var.get():
+                if actual_key:
+                    keyring.set_password(self.KEYRING_SERVICE, f"api_key_slot_{i}", actual_key)
+                    self.real_keys[i] = actual_key
+            else:
+                try:
+                    keyring.delete_password(self.KEYRING_SERVICE, f"api_key_slot_{i}")
+                except keyring.errors.PasswordDeleteError:
+                    pass
             
         if self.remember_var.get():
             cfg["slots"] = slots
@@ -1467,16 +1559,15 @@ class APIPage(tk.Frame):
         cfg = load_config()
         cfg.pop("slots", None)
         cfg.pop("active_slot", None)
-        cfg.pop("base_url", None)
-        cfg.pop("api_key", None)
-        cfg.pop("model", None)
         save_config(cfg)
         
-        # optionally delete the key file as well
-        if os.path.exists(CryptoHelper.KEY_FILE):
-             os.remove(CryptoHelper.KEY_FILE)
+        for i in range(self.NUM_SLOTS):
+            try:
+                keyring.delete_password(self.KEYRING_SERVICE, f"api_key_slot_{i}")
+            except keyring.errors.PasswordDeleteError:
+                pass
              
-        messagebox.showinfo("已清除", "API 登录信息已删除（其他全局设置保留）。")
+        messagebox.showinfo("已清除", "API 登录信息已从系统凭据管理器和配置文件中安全删除。")
         
     def on_show(self):
         if self.app.app_state.get("connected"):
@@ -1484,7 +1575,7 @@ class APIPage(tk.Frame):
 
 
 # ============================================================
-# 2. Scene  (now also hosts the import-save button)
+# 2. Scene 
 # ============================================================
 
 class ScenePage(tk.Frame):
@@ -1633,6 +1724,22 @@ class ScenePage(tk.Frame):
         )
         adv_lbl.pack(anchor="w", fill="x", padx=18, pady=(0, 8))
         auto_wrap(adv_lbl)
+        
+        
+        # ========== NEW: 体验设置 Toggle ==========
+        cfg_prefs = load_config().get("preferences", {}) # <--- 读取偏好设置
+        
+        self.adv_save_token_var = tk.BooleanVar(value=cfg_prefs.get("adv_save_token", True))
+        ttk.Checkbutton(card, text="省token模式：每一回合开启新对话并提取履历，大量节省词元(推荐)",
+                        variable=self.adv_save_token_var, style="Card.TCheckbutton").pack(anchor="w", padx=18, pady=(4, 0))
+                        
+        self.adv_edit_prompt_var = tk.BooleanVar(value=cfg_prefs.get("adv_edit_prompt", False))
+        ttk.Checkbutton(card, text="游戏中允许编辑系统提示词",
+                        variable=self.adv_edit_prompt_var, style="Card.TCheckbutton").pack(anchor="w", padx=18, pady=(4, 0))
+                        
+        self.adv_show_payload_var = tk.BooleanVar(value=cfg_prefs.get("adv_show_payload", False))
+        ttk.Checkbutton(card, text="显示每轮对话发送给API的内容",
+                        variable=self.adv_show_payload_var, style="Card.TCheckbutton").pack(anchor="w", padx=18, pady=(4, 12))
 
         adv_row = tk.Frame(card, bg=COLORS["card"])
         adv_row.pack(anchor="w", padx=18, pady=(0, 14))
@@ -1659,6 +1766,20 @@ class ScenePage(tk.Frame):
         c["scene_id"] = sid
         c["scene_name"] = sc["name"]
         c["scenario_tag"] = sc["scenario_tag"]
+        
+        # 记录高级功能偏好到当前角色
+        c["adv_save_token"] = self.adv_save_token_var.get()
+        c["adv_edit_prompt"] = self.adv_edit_prompt_var.get()
+        c["adv_show_payload"] = self.adv_show_payload_var.get()
+        
+        # ================= NEW: 保存高级功能到本地配置文件 =================
+        cfg = load_config()
+        prefs = cfg.setdefault("preferences", {})
+        prefs["adv_save_token"] = self.adv_save_token_var.get()
+        prefs["adv_edit_prompt"] = self.adv_edit_prompt_var.get()
+        prefs["adv_show_payload"] = self.adv_show_payload_var.get()
+        save_config(cfg)
+        # ===============================================================
 
         if sid == "custom":
             txt = self.custom_text.get("1.0", "end").strip()
@@ -1673,7 +1794,6 @@ class ScenePage(tk.Frame):
 
         self.app.show_page("IdentityPage")
 
-
 # ============================================================
 # 3. Identity + content mode + modifiers
 # ============================================================
@@ -1682,16 +1802,19 @@ class IdentityPage(tk.Frame):
     def __init__(self, parent, app):
         super().__init__(parent, bg=COLORS["bg"])
         self.app = app
+        
+        cfg_prefs = load_config().get("preferences", {}) # <--- 读取偏好设置
 
         self.gender_var = tk.StringVar(value="男")
-        self.content_var = tk.StringVar(value=CONTENT_NORMAL)
-        self.diff_var = tk.StringVar(value=DIFF_STANDARD)
+        self.content_var = tk.StringVar(value=cfg_prefs.get("content_mode", CONTENT_NORMAL))
+        self.diff_var = tk.StringVar(value=cfg_prefs.get("difficulty", DIFF_STANDARD))
 
-        self.fast_var = tk.BooleanVar(value=False)
-
-        self.fine_var = tk.BooleanVar(value=False)
-        self.fine_start_var = tk.StringVar(value="0")
-        self.fine_end_var = tk.StringVar(value="80")
+        self.fast_var = tk.BooleanVar(value=cfg_prefs.get("fast_mode", False))
+        self.fine_var = tk.BooleanVar(value=cfg_prefs.get("fine_enabled", False))
+        
+        # Fine Mode 的具体数值也顺手保存一下，方便测试
+        self.fine_start_var = tk.StringVar(value=cfg_prefs.get("fine_start", "0"))
+        self.fine_end_var = tk.StringVar(value=cfg_prefs.get("fine_end", "80"))
         self.fine_timestamp_var = tk.StringVar(value="year")
         # Display variable for the timestamp combobox.
         self.fine_ts_display_var = tk.StringVar(
@@ -1796,7 +1919,7 @@ class IdentityPage(tk.Frame):
 
         content_options = [
             (CONTENT_NORMAL, "普通人生", "世间百态", "normal"),
-            (CONTENT_HORNY, "我有性压抑", "特殊属性和一些独特特质。", "normal"),
+            #(CONTENT_HORNY, "我有性压抑", "特殊属性和一些独特特质。", "normal"),
             (CONTENT_STORE, "我要通马桶", "扮演神秘NPC接受委托和解决委托。", "normal"),
         ]
 
@@ -2018,6 +2141,19 @@ class IdentityPage(tk.Frame):
         else:
             self.app.configure_fine_mode(False)
 
+        # ================= NEW: 保存模式偏好到本地配置文件 =================
+        cfg = load_config()
+        prefs = cfg.setdefault("preferences", {})
+        prefs["content_mode"] = self.content_var.get()
+        prefs["difficulty"] = self.diff_var.get()
+        prefs["fast_mode"] = self.fast_var.get()
+        prefs["fine_enabled"] = self.fine_var.get()
+        if self.fine_var.get():
+            prefs["fine_start"] = self.fine_start_var.get().strip()
+            prefs["fine_end"] = self.fine_end_var.get().strip()
+        save_config(cfg)
+        # ===============================================================
+
         self.app.sync_compat_mode()
         self.app.init_attributes_for_mode()
 
@@ -2089,6 +2225,25 @@ class StoreKeeperPage(tk.Frame):
         outer, card = Card(inner)
         outer.pack(fill="x", pady=8)
 
+        # (在 __init__ 函数的背景故事输入框的逻辑后面加入这块代码：)
+
+        # ---- 营业期限 ----
+        outer, card = Card(inner)
+        outer.pack(fill="x", pady=8)
+
+        tk.Label(card, text="店铺营业期限",
+                 bg=COLORS["card"], fg=COLORS["text"], font=F_SUB).pack(
+            anchor="w", padx=18, pady=(12, 4))
+
+        info_time = "设定店铺运营的时间。到达期限后游戏将自动结算并生成总评结局。"
+        tk.Label(card, text=info_time, bg=COLORS["card"], fg=COLORS["subtext"], font=F_SMALL).pack(anchor="w", padx=18, pady=(0, 4))
+        
+        self.end_tick_var = tk.StringVar(value="120")
+        f_tick = tk.Frame(card, bg=COLORS["card"])
+        f_tick.pack(anchor="w", padx=18, pady=(0, 12))
+        ttk.Entry(f_tick, textvariable=self.end_tick_var, width=8).pack(side="left")
+        tk.Label(f_tick, text=" 旬", bg=COLORS["card"], fg=COLORS["text"], font=F_BODY).pack(side="left")
+
         tk.Label(card, text="店主背景故事（必填）",
                  bg=COLORS["card"], fg=COLORS["text"], font=F_SUB).pack(
             anchor="w", padx=18, pady=(12, 4))
@@ -2118,6 +2273,9 @@ class StoreKeeperPage(tk.Frame):
         if c.get("store_keeper_backstory"):
             self.backstory_text.delete("1.0", "end")
             self.backstory_text.insert("1.0", c["store_keeper_backstory"])
+        # 回显设定的回合数
+        if c.get("store_end_tick"):
+            self.end_tick_var.set(str(c["store_end_tick"]))
         self._toggle_custom()
 
     def go_next(self):
@@ -2128,6 +2286,14 @@ class StoreKeeperPage(tk.Frame):
 
         if not backstory:
             messagebox.showwarning("提示", "店主背景故事必须填写。")
+            return
+            
+        # 校验营业回合
+        try:
+            end_tick = int(self.end_tick_var.get().strip())
+            if end_tick <= 0: raise ValueError
+        except Exception:
+            messagebox.showwarning("提示", "营业期限必须是大于 0 的整数。")
             return
 
         if arch_id == "custom":
@@ -2144,6 +2310,7 @@ class StoreKeeperPage(tk.Frame):
         c["store_keeper_type_label"] = label
         c["store_keeper_type_custom"] = self.custom_name_var.get().strip()
         c["store_keeper_backstory"] = backstory
+        c["store_end_tick"] = end_tick  # 存入角色数据
 
         init_store_state(c)
         self.app.show_page("TalentPage")
@@ -2158,7 +2325,7 @@ class TalentPage(tk.Frame):
     def __init__(self, parent, app):
         super().__init__(parent, bg=COLORS["bg"])
         self.app = app
-        self.drawn_talents = []
+        self.drawn_talents =[]
         self.selected_indices = set()
 
         TopBar(
@@ -2256,32 +2423,53 @@ class TalentPage(tk.Frame):
     def _mode_str(self):
         diff = self.app.character.get("difficulty", DIFF_STANDARD)
         if diff == DIFF_TEST:
-            return "测试模式：无限抽"
+            return "测试模式：无限选取"
         if diff == DIFF_IRONMAN:
             return "铁人模式：只能抽 1 次"
         return "标准模式：最多 5 次"
 
     def on_show(self):
+        c = self.app.character
+        is_test = c.get("difficulty") == DIFF_TEST
+        
+        if is_test:
+            self.btn_roll.config(text="✨ [测试] 显示所有可用天赋", state="normal")
+        else:
+            self.btn_roll.config(text=f"🎲 抽取 {self.DRAW_COUNT} 个天赋")
+            self.btn_roll.config(state="normal" if c["talent_rolls_used"] < self._max_rolls() else "disabled")
+            
         self.refresh_pickbar()
         self.update_count()
-        c = self.app.character
-        self.btn_roll.config(state="normal" if c["talent_rolls_used"] < self._max_rolls() else "disabled")
 
     def update_count(self):
-        used = self.app.character["talent_rolls_used"]
+        c = self.app.character
+        is_test = c.get("difficulty") == DIFF_TEST
+        
+        if is_test:
+            self.label_count.config(text="测试模式：无限选取")
+            return
+            
+        used = c["talent_rolls_used"]
         mr = self._max_rolls()
         rem = "∞" if mr == float("inf") else max(0, mr - used)
         self.label_count.config(text=f"{self._mode_str()}　·　已抽 {used} 次　·　剩余 {rem}")
 
     def refresh_pickbar(self):
+        is_test = self.app.character.get("difficulty") == DIFF_TEST
         n = len(self.selected_indices)
-        self.label_pick.config(text=f"已选 {n} / {self.PICK_COUNT}")
-        self.btn_next.config(state="normal" if n == self.PICK_COUNT else "disabled")
+        
+        if is_test:
+            self.label_pick.config(text=f"已选 {n} 个（无限制）")
+            self.btn_next.config(state="normal")
+        else:
+            self.label_pick.config(text=f"已选 {n} / {self.PICK_COUNT}")
+            self.btn_next.config(state="normal" if n == self.PICK_COUNT else "disabled")
 
     def roll(self):
         c = self.app.character
+        is_test = c.get("difficulty") == DIFF_TEST
 
-        if c["talent_rolls_used"] >= self._max_rolls():
+        if not is_test and c["talent_rolls_used"] >= self._max_rolls():
             messagebox.showinfo("提示", "抽取次数已用完！")
             return
 
@@ -2290,39 +2478,50 @@ class TalentPage(tk.Frame):
 
         combined_pool = list(m.TALENT_POOL) + load_user_talents()
 
-        drawn = normal_data.draw_talents(
-            combined_pool,
-            c["scenario_tag"],
-            mode_tag,
-            n=self.DRAW_COUNT,
-        )
-
-        if len(drawn) < self.PICK_COUNT:
-            messagebox.showwarning(
-                "提示",
-                f"天赋池里满足条件 (mode={mode_tag} & scenario={c['scenario_tag']}) "
-                f"的天赋少于 {self.PICK_COUNT} 个。\n\n"
-                f"请去对应 data 文件里多加几条。",
+        if is_test:
+            # 测试模式：显示当前场景与模式下所有适用的天赋
+            drawn = normal_data.filter_pool(combined_pool, c["scenario_tag"], mode_tag)
+        else:
+            # 普通抽取
+            drawn = normal_data.draw_talents(
+                combined_pool,
+                c["scenario_tag"],
+                mode_tag,
+                n=self.DRAW_COUNT,
             )
-            return
+
+            if len(drawn) < self.PICK_COUNT:
+                messagebox.showwarning(
+                    "提示",
+                    f"天赋池里满足条件 (mode={mode_tag} & scenario={c['scenario_tag']}) "
+                    f"的天赋少于 {self.PICK_COUNT} 个。\n\n"
+                    f"请去对应 data 文件里多加几条。",
+                )
+                return
 
         self.drawn_talents = drawn
         self.selected_indices = set()
-        c["talent_rolls_used"] += 1
-        c["talents"] = []
+        
+        if not is_test:
+            c["talent_rolls_used"] += 1
+            
+        c["talents"] =[]
 
         self.refresh_list()
         self.refresh_pickbar()
         self.update_count()
 
-        if c["talent_rolls_used"] >= self._max_rolls():
+        if not is_test and c["talent_rolls_used"] >= self._max_rolls():
             self.btn_roll.config(state="disabled")
 
     def toggle_select(self, idx):
+        is_test = self.app.character.get("difficulty") == DIFF_TEST
+        
         if idx in self.selected_indices:
             self.selected_indices.remove(idx)
         else:
-            if len(self.selected_indices) >= self.PICK_COUNT:
+            if not is_test and len(self.selected_indices) >= self.PICK_COUNT:
+                # 超过数量时顶掉第一个
                 self.selected_indices = set(list(self.selected_indices)[1:])
             self.selected_indices.add(idx)
 
@@ -2336,7 +2535,7 @@ class TalentPage(tk.Frame):
         if not self.drawn_talents:
             tk.Label(
                 self.list_frame,
-                text="（点上方按钮抽卡）",
+                text="（点上方按钮抽卡/显示天赋）",
                 bg=COLORS["bg"],
                 fg=COLORS["muted"],
                 font=F_BODY,
@@ -2387,7 +2586,7 @@ class TalentPage(tk.Frame):
                 font=(FONT_FAM, 12, "bold"),
             ).pack(side="left")
 
-            mods = "  ".join(f"{a}{md}" for a, md in t.get("modifiers", []))
+            mods = "  ".join(f"{a}{md}" for a, md in t.get("modifiers",[]))
             if mods:
                 tk.Label(header, text=mods, bg=inside_bg, fg=COLORS["subtext"], font=F_SMALL).pack(side="right")
 
@@ -2411,7 +2610,8 @@ class TalentPage(tk.Frame):
             self._bind_click_recursive(child, idx)
 
     def go_next(self):
-        if len(self.selected_indices) != self.PICK_COUNT:
+        is_test = self.app.character.get("difficulty") == DIFF_TEST
+        if not is_test and len(self.selected_indices) != self.PICK_COUNT:
             messagebox.showwarning("提示", f"请选择 {self.PICK_COUNT} 个天赋！")
             return
 
@@ -2451,6 +2651,25 @@ class AttributePage(tk.Frame):
 
         inner = tk.Frame(body, bg=COLORS["bg"])
         inner.pack(fill="both", expand=True, padx=40, pady=20)
+        
+        # 顶部模式切换与测试功能区
+        self.top_ctrl = tk.Frame(inner, bg=COLORS["bg"])
+        self.top_ctrl.pack(fill="x", pady=(0, 10))
+        
+        self.btn_toggle_mode = ttk.Button(
+            self.top_ctrl,
+            text="🎲 试试传统派roll点！",
+            style="Ghost.TButton",
+            command=self.toggle_roll_mode
+        )
+        self.btn_toggle_mode.pack(side="left")
+        
+        self.btn_test_points = ttk.Button(
+            self.top_ctrl,
+            text="🧪[测试] +50点自由属性",
+            style="Ghost.TButton",
+            command=self.add_test_points
+        )
 
         top = tk.Frame(inner, bg=COLORS["bg"])
         top.pack(fill="x")
@@ -2498,61 +2717,156 @@ class AttributePage(tk.Frame):
         m = self.app.mode_data()
         return getattr(m, "POINTS_POOL_DEFAULT", 180)
 
-    def on_show(self):
+    def toggle_roll_mode(self):
+        c = self.app.character
+        c["is_classic_roll"] = not c.get("is_classic_roll", False)
+        
+        if c["is_classic_roll"]:
+            # 初次切换到 Roll 模式时自动强制 Roll 一次
+            if c.get("stat_rolls_used", 0) == 0:
+                self.do_classic_roll(force=True)
+        else:
+            # 切换回点数模式时重置属性为 30
+            m = self.app.mode_data()
+            for a in m.ATTRIBUTES:
+                c["attributes"][a] = 30
+                
+        self.on_show()
+
+    def add_test_points(self):
+        c = self.app.character
+        c["test_extra_points"] = c.get("test_extra_points", 0) + 50
+        self.on_show()
+
+    def _stat_roll_max(self):
+        diff = self.app.character.get("difficulty", DIFF_STANDARD)
+        if diff == DIFF_TEST:
+            return float("inf")
+        if diff == DIFF_IRONMAN:
+            return 1
+        return 5
+
+    def do_classic_roll(self, force=False):
+        c = self.app.character
+        max_rolls = self._stat_roll_max()
+        
+        if not force and c.get("stat_rolls_used", 0) >= max_rolls:
+            messagebox.showinfo("提示", "重roll次数已用完！")
+            return
+            
         m = self.app.mode_data()
+        # “每一个属性现在都会变成3d6*5”
+        for a in m.ATTRIBUTES:
+            c["attributes"][a] = roll_dice("3d6") * 5
+            
+        if not force:
+            c["stat_rolls_used"] = c.get("stat_rolls_used", 0) + 1
+            
+        self.on_show()
+
+    def on_show(self):
+        c = self.app.character
+        m = self.app.mode_data()
+        
+        # 确保变量存在
+        if "test_extra_points" not in c:
+            c["test_extra_points"] = 0
+        if "stat_rolls_used" not in c:
+            c["stat_rolls_used"] = 0
+        if "is_classic_roll" not in c:
+            c["is_classic_roll"] = False
+
+        is_test = c.get("difficulty", DIFF_STANDARD) == DIFF_TEST
+        is_classic = c["is_classic_roll"]
+
+        # 测试模式增加额外点数按钮
+        if is_test and not is_classic:
+            self.btn_test_points.pack(side="left", padx=10)
+        else:
+            self.btn_test_points.pack_forget()
+
+        if is_classic:
+            self.btn_toggle_mode.config(text="🔙 切换回自由分配模式")
+        else:
+            self.btn_toggle_mode.config(text="🎲 试试传统派roll点！")
 
         for w in self.af.winfo_children():
             w.destroy()
 
         self.attr_labels = {}
-
-        for i, a in enumerate(m.ATTRIBUTES):
-            row = tk.Frame(self.af, bg=COLORS["card"])
-            row.grid(row=i, column=0, sticky="we", pady=4)
+        
+        # =========== 经典 Roll 点模式 ===========
+        if is_classic:
+            roll_frame = tk.Frame(self.af, bg=COLORS["card"])
+            roll_frame.grid(row=0, column=0, sticky="we", pady=(0, 10))
             self.af.grid_columnconfigure(0, weight=1)
-
-            tk.Label(
-                row,
-                text=f"{a}　{m.ATTR_DESC[a]}",
-                bg=COLORS["card"],
-                fg=COLORS["text"],
-                font=F_BODY,
-                width=14,
-                anchor="w",
-            ).pack(side="left")
-
-            desc = tk.Label(
-                row,
-                text=m.ATTR_LONG_DESC[a],
-                bg=COLORS["card"],
-                fg=COLORS["subtext"],
-                font=F_SMALL,
-                anchor="w",
-                justify="left",
+            
+            mr = self._stat_roll_max()
+            used = c["stat_rolls_used"]
+            rem = "∞" if mr == float("inf") else max(0, mr - used)
+            
+            btn_roll = ttk.Button(
+                roll_frame, text=f"🎲 重roll所有属性（剩余 {rem} 次）", 
+                style="Primary.TButton", command=self.do_classic_roll
             )
-            desc.pack(side="left", padx=(0, 10), fill="x", expand=True)
-            auto_wrap(desc)
+            btn_roll.pack(side="left")
+            
+            if used >= mr and mr != float("inf"):
+                btn_roll.config(state="disabled")
 
-            ttk.Button(row, text="−", width=3, style="Secondary.TButton", command=lambda x=a: self.change(x, -5)).pack(
-                side="left", padx=2
-            )
+            for i, a in enumerate(m.ATTRIBUTES):
+                row = tk.Frame(self.af, bg=COLORS["card"])
+                row.grid(row=i+1, column=0, sticky="we", pady=4)
+                
+                tk.Label(row, text=f"{a}　{m.ATTR_DESC[a]}", bg=COLORS["card"], fg=COLORS["text"], font=F_BODY, width=14, anchor="w").pack(side="left")
+                desc = tk.Label(row, text=m.ATTR_LONG_DESC[a], bg=COLORS["card"], fg=COLORS["subtext"], font=F_SMALL, anchor="w", justify="left")
+                desc.pack(side="left", padx=(0, 10), fill="x", expand=True)
+                auto_wrap(desc)
+                
+                lbl = tk.Label(row, text=str(c["attributes"].get(a, 30)), bg=COLORS["card"], fg=COLORS["primary"], font=(FONT_FAM, 13, "bold"), width=5)
+                lbl.pack(side="right", padx=10)
+                self.attr_labels[a] = lbl
+                
+            self.tip_label.config(text="传统派Roll点模式：所有属性变为 3d6*5")
+            self.label_remain.config(text="")
+            
+        # =========== 点数购买模式 ===========
+        else:
+            for i, a in enumerate(m.ATTRIBUTES):
+                row = tk.Frame(self.af, bg=COLORS["card"])
+                row.grid(row=i, column=0, sticky="we", pady=4)
+                self.af.grid_columnconfigure(0, weight=1)
 
-            lbl = tk.Label(row, text="30", bg=COLORS["card"], fg=COLORS["text"], font=(FONT_FAM, 13, "bold"), width=5)
-            lbl.pack(side="left", padx=4)
-            self.attr_labels[a] = lbl
+                tk.Label(
+                    row, text=f"{a}　{m.ATTR_DESC[a]}", bg=COLORS["card"], 
+                    fg=COLORS["text"], font=F_BODY, width=14, anchor="w"
+                ).pack(side="left")
 
-            ttk.Button(row, text="+", width=3, style="Secondary.TButton", command=lambda x=a: self.change(x, 5)).pack(
-                side="left", padx=2
-            )
+                desc = tk.Label(
+                    row, text=m.ATTR_LONG_DESC[a], bg=COLORS["card"], 
+                    fg=COLORS["subtext"], font=F_SMALL, anchor="w", justify="left"
+                )
+                desc.pack(side="left", padx=(0, 10), fill="x", expand=True)
+                auto_wrap(desc)
 
-        self.tip_label.config(text=f"每项 30~85，每次 ±5　|　总池 {self._points_pool()} 点")
+                ttk.Button(row, text="−", width=3, style="Secondary.TButton", command=lambda x=a: self.change(x, -5)).pack(side="left", padx=2)
+                lbl = tk.Label(row, text=str(c["attributes"].get(a, 30)), bg=COLORS["card"], fg=COLORS["text"], font=(FONT_FAM, 13, "bold"), width=5)
+                lbl.pack(side="left", padx=4)
+                self.attr_labels[a] = lbl
+                ttk.Button(row, text="+", width=3, style="Secondary.TButton", command=lambda x=a: self.change(x, 5)).pack(side="left", padx=2)
+
+            pool_total = self._points_pool() + c["test_extra_points"]
+            self.tip_label.config(text=f"每项 30~85，每次 ±5　|　总池 {pool_total} 点")
+            
         self.refresh()
         self.refresh_luck()
 
     def remaining(self):
         m = self.app.mode_data()
-        spent = sum(self.app.character["attributes"].values()) - 30 * len(m.ATTRIBUTES)
-        return self._points_pool() - spent
+        c = self.app.character
+        spent = sum(c["attributes"].values()) - 30 * len(m.ATTRIBUTES)
+        pool = self._points_pool() + c.get("test_extra_points", 0)
+        return pool - spent
 
     def change(self, attr, delta):
         c = self.app.character
@@ -2569,12 +2883,16 @@ class AttributePage(tk.Frame):
         self.refresh()
 
     def refresh(self):
+        c = self.app.character
         for a, lbl in self.attr_labels.items():
-            lbl.config(text=str(self.app.character["attributes"][a]))
+            lbl.config(text=str(c["attributes"].get(a, 30)))
 
-        rem = self.remaining()
-        color = COLORS["primary"] if rem == 0 else (COLORS["warning"] if rem > 0 else COLORS["danger"])
-        self.label_remain.config(text=f"剩余可分配点数：{rem}", fg=color)
+        if not c.get("is_classic_roll", False):
+            rem = self.remaining()
+            color = COLORS["primary"] if rem == 0 else (COLORS["warning"] if rem > 0 else COLORS["danger"])
+            self.label_remain.config(text=f"剩余可分配点数：{rem}", fg=color)
+        else:
+            self.label_remain.config(text="")
 
     def _luck_max(self):
         diff = self.app.character.get("difficulty", DIFF_STANDARD)
@@ -2587,31 +2905,34 @@ class AttributePage(tk.Frame):
     def roll_luck(self):
         c = self.app.character
 
-        if c["luck_rolls_used"] >= self._luck_max():
+        if c.get("luck_rolls_used", 0) >= self._luck_max():
             messagebox.showinfo("提示", "幸运投掷次数已用完！")
             return
 
         c["luck"] = roll_dice("(3d6+2)*5")
-        c["luck_rolls_used"] += 1
+        c["luck_rolls_used"] = c.get("luck_rolls_used", 0) + 1
         self.refresh_luck()
 
     def refresh_luck(self):
         c = self.app.character
         mr = self._luck_max()
-        rem = "∞" if mr == float("inf") else max(0, mr - c["luck_rolls_used"])
+        used = c.get("luck_rolls_used", 0)
+        rem = "∞" if mr == float("inf") else max(0, mr - used)
 
-        self.luck_label.config(text=str(c["luck"]) if c["luck"] else "未投掷")
+        self.luck_label.config(text=str(c.get("luck", 0)) if c.get("luck", 0) else "未投掷")
         self.luck_count.config(text=f"剩余 {rem} 次")
         self.btn_luck.config(state="normal" if rem != 0 else "disabled")
 
     def go_next(self):
         c = self.app.character
 
-        if self.remaining() != 0:
-            if not messagebox.askyesno("确认", f"还剩 {self.remaining()} 点未分配，确定继续吗？"):
-                return
+        # 仅在非经典 Roll 点模式下检测点数是否用光
+        if not c.get("is_classic_roll", False):
+            if self.remaining() != 0:
+                if not messagebox.askyesno("确认", f"还剩 {self.remaining()} 点未分配，确定继续吗？"):
+                    return
 
-        if c["luck"] == 0:
+        if c.get("luck", 0) == 0:
             messagebox.showwarning("提示", "请先投掷幸运！")
             return
 
@@ -2674,11 +2995,11 @@ class FineTrackerPage(tk.Frame):
             font=F_HEAD,
         ).pack(anchor="w", padx=18, pady=(16, 4))
 
+        # (在 FineTrackerPage.__init__ 中找到这段，替换 info 文本)
         info = (
-            "微调模式下，角色不是从 0 岁开始。"
-            "你每有 1 年开局前人生，就获得 1 点经历点。"
-            "这些点只能分配给当前模式定义的派生追踪项，例如学历、知识、资产、名气等。"
-            "核心出生属性不会因此改变。AI 会根据这些分配编写开局前的人生经历。"
+            "微调模式下，如果开局年龄大于 18 岁，系统会在后台为你自动模拟 1~18 岁的自然成长（含义务教育等）。\n\n"
+            "18 岁之后，你每年获得 1 个【自由成长检定】机会。\n"
+            "你可以把它们分配到下方的派生属性上，系统会为你进行对应的 COC 成长检定（投掷 d100，大于等于当前属性才成长，有概率失败！）。"
         )
 
         lbl = tk.Label(
@@ -2861,7 +3182,7 @@ class FineTrackerPage(tk.Frame):
         color = COLORS["primary"] if rem == 0 else COLORS["warning"]
 
         self.remaining_label.config(
-            text=f"总经历点：{total}　已分配：{spent}　剩余：{rem}",
+            text=f"总成长检定次数：{total}　已分配：{spent}　剩余：{rem}",
             fg=color,
         )
 
@@ -2950,10 +3271,12 @@ class ConfirmPage(tk.Frame):
         )
         self.backstory.pack(fill="x")
         # --- Skill check checkbox (only for normal/horni modes) ---
-        self.skill_check_var = tk.BooleanVar(value=True)
+        cfg_prefs = load_config().get("preferences", {}) # <--- 读取偏好设置
+        self.skill_check_var = tk.BooleanVar(value=cfg_prefs.get("skill_check_enabled", True))
+        
         self.skill_check_cb = ttk.Checkbutton(
             inner,   # the inner Frame we already have
-            text="使用基于d100的属性鉴定",
+            text="使用基于d100的属性检定",
             variable=self.skill_check_var,
             style="Card.TCheckbutton",
         )
@@ -3064,12 +3387,20 @@ class ConfirmPage(tk.Frame):
         c["max_hp"] = m.calculate_max_hp(final)
         c["hp"] = c["max_hp"]
 
-        self.app.show_page("GamePage")
-                # Save the skill check preference
+        # Save the skill check preference
         c["skill_checks_enabled"] = self.skill_check_var.get()
         # Store mode always enabled
         if c.get("content_mode") == CONTENT_STORE:
             c["skill_checks_enabled"] = True
+            
+        # ================= NEW: 保存检定开关偏好 =================
+        cfg = load_config()
+        prefs = cfg.setdefault("preferences", {})
+        prefs["skill_check_enabled"] = self.skill_check_var.get()
+        save_config(cfg)
+        # =======================================================
+
+        self.app.show_page("GamePage")
 
 
 # ============================================================
@@ -3160,22 +3491,63 @@ class GamePage(tk.Frame):
         m.init_trackers(c)
         m.init_time_state(c)
 
-        # Fine Mode 起点经验
         fine_start_logs = []
-        init_trackers = c.get("initial_trackers") or {}
-        trackers = getattr(m, "TRACKERS", {})
-        for key, value in init_trackers.items():
-            if key not in trackers:
-                continue
-            try:
-                value = int(value)
-            except Exception:
-                continue
-            if value == 0:
-                continue
-            c[key] = c.get(key, trackers[key].get("initial", 0)) + value
-            label = trackers[key].get("label", key)
-            fine_start_logs.append(f"{label} +{value}")
+        
+        # ==== Fine Mode: 自动模拟 1~18 岁并结算自由成长检定 ====
+        if c.get("fine_enabled"):
+            fs = c.get("fine_settings", {})
+            start_age = int(float(fs.get("start_age", 0)))
+            
+            if start_age > 0:
+                cfg = m.get_time_config(c)
+                age_key = cfg["age_key"]
+                
+                # 1. 记录初始基准值
+                trackers = getattr(m, "TRACKERS", {})
+                baseline = {k: c.get(k, 0) for k in trackers.keys()}
+                
+                # 2. 模拟 1 到 min(18, start_age) 岁的自然成长
+                original_age = c.get(age_key, 0)
+                for y in range(1, min(18, start_age) + 1):
+                    c[age_key] = y
+                    m.apply_turn_start_effects(c)
+                    
+                c[age_key] = original_age # 恢复实际年龄
+                
+                # 总结 1~18 岁模拟结果日志
+                for k in trackers.keys():
+                    diff = c.get(k, 0) - baseline.get(k, 0)
+                    if diff > 0:
+                        label = trackers[k].get("label", k)
+                        fine_start_logs.append(f"1~18岁自然成长：{label} +{diff}")
+                        
+                # 3. 结算用户分配的自由成长检定 (18岁以后)
+                init_trackers = c.get("initial_trackers") or {}
+                for key, checks in init_trackers.items():
+                    if key not in trackers or checks <= 0: continue
+                    
+                    success_count = 0
+                    total_gain = 0
+                    for _ in range(checks):
+                        current_val = c.get(key, 0)
+                        # COC 成长骰：投掷 d100，大于等于当前属性才成长
+                        if random.randint(1, 100) >= current_val:
+                            gain = roll_dice("1d6")
+                            # 按照模式里的高等级缩减惩罚
+                            if current_val >= 90: gain = max(1, gain // 3)
+                            elif current_val >= 70: gain = max(1, gain // 3)
+                            elif current_val >= 50: gain = max(1, gain // 2)
+                            
+                            c[key] = min(100, current_val + gain)
+                            success_count += 1
+                            total_gain += gain
+                            
+                    label = trackers[key].get("label", key)
+                    if success_count > 0:
+                        fine_start_logs.append(f"18岁后历练：{label} 成长检定 {checks} 次，成功 {success_count} 次 (共 +{total_gain})")
+                    else:
+                        fine_start_logs.append(f"18岁后历练：{label} 成长检定 {checks} 次，全部失败")
+
         c["_fine_start_logs"] = fine_start_logs
 
         self.app.sync_compat_mode()
@@ -3469,7 +3841,6 @@ class GamePage(tk.Frame):
 
     def show_next_button(self):
         self.clear_control()
-
         row = tk.Frame(self.control_frame, bg=COLORS["card"])
         row.pack(pady=10)
 
@@ -3483,10 +3854,18 @@ class GamePage(tk.Frame):
             style="Secondary.TButton", command=self.do_active_action,
         ).pack(side="left", padx=6)
 
-        ttk.Button(
-            row, text="🛠 编辑系统提示词",
-            style="Secondary.TButton", command=self.edit_system_prompt,
-        ).pack(side="left", padx=6)
+        c = self.app.character
+        if c.get("adv_edit_prompt"):
+            ttk.Button(
+                row, text="🛠 编辑系统提示词",
+                style="Secondary.TButton", command=self.edit_system_prompt,
+            ).pack(side="left", padx=6)
+            
+        if c.get("adv_show_payload"):
+            ttk.Button(
+                row, text="📄 本轮对话发送内容",
+                style="Ghost.TButton", command=self.show_api_payload,
+            ).pack(side="left", padx=6)
 
     def next_tick(self):
         c = self.app.character
@@ -3552,9 +3931,7 @@ class GamePage(tk.Frame):
         return finedata.reached_end_age(c, self.app.mode_data())
     
     def show_retry_button(self):
-        """AI 报错后专用：让玩家明确点击「重试」而不是误以为时间会推进。"""
         self.clear_control()
-
         row = tk.Frame(self.control_frame, bg=COLORS["card"])
         row.pack(pady=10)
 
@@ -3563,10 +3940,23 @@ class GamePage(tk.Frame):
             style="Primary.TButton", command=self.do_retry,
         ).pack(side="left", padx=6)
 
+        c = self.app.character
+        if c.get("adv_edit_prompt"):
+            ttk.Button(
+                row, text="🛠 编辑系统提示词",
+                style="Secondary.TButton", command=self.edit_system_prompt,
+            ).pack(side="left", padx=6)
+
         ttk.Button(
-            row, text="🛠 编辑系统提示词",
-            style="Secondary.TButton", command=self.edit_system_prompt,
+            row, text="📄 显示原始返回",
+            style="Ghost.TButton", command=self.show_raw_response,
         ).pack(side="left", padx=6)
+        
+        if c.get("adv_show_payload"):
+            ttk.Button(
+                row, text="📄 完整发送内容",
+                style="Ghost.TButton", command=self.show_api_payload,
+            ).pack(side="left", padx=6)
 
         tk.Label(
             self.control_frame,
@@ -3585,6 +3975,37 @@ class GamePage(tk.Frame):
         self._pending_retry = None
         self.set_loading("正在重试上一次请求……")
         self.send_to_ai(user_msg, callback)
+
+    def show_raw_response(self):
+            """弹出一个窗口，显示 AI 最近一次返回的内容。"""
+            content = getattr(self, "_last_raw_response", "（没有记录到任何内容）")
+            
+            win = tk.Toplevel(self.app)
+            win.title("AI 原始返回内容")
+            win.geometry("640x480")
+            win.configure(bg=COLORS["bg"])
+            win.transient(self.app)
+            
+            tk.Label(
+                win, text="🔍 原始返回内容", bg=COLORS["bg"], fg=COLORS["text"], font=F_HEAD
+            ).pack(anchor="w", padx=16, pady=(14, 4))
+            
+            info = "如果看到下面是一大段普通聊天的文字，说明 AI 忘记输出 JSON 格式了；如果看到拒绝回答，说明触发了审查过滤器；如果是空的一行，说明 API 连接失败。"
+            lbl = tk.Label(win, text=info, bg=COLORS["bg"], fg=COLORS["subtext"], font=F_SMALL, justify="left")
+            lbl.pack(anchor="w", fill="x", padx=16, pady=(0, 8))
+            auto_wrap(lbl)
+            
+            txt = scrolledtext.ScrolledText(
+                win, font=F_MONO, wrap="word", bg=COLORS["card"], bd=0, 
+                highlightbackground=COLORS["border"], highlightthickness=1
+            )
+            txt.pack(fill="both", expand=True, padx=16, pady=8)
+            txt.insert("1.0", content)
+            txt.config(state="disabled") # 只读模式
+            
+            bottom = tk.Frame(win, bg=COLORS["bg"])
+            bottom.pack(side="bottom", fill="x", padx=16, pady=16)
+            ttk.Button(bottom, text="关闭", style="Primary.TButton", command=win.destroy).pack(side="right")
     
     def apply_event(self, data, add_header=True, pre_logs=None):
         c = self.app.character
@@ -3615,11 +4036,40 @@ class GamePage(tk.Frame):
                 continue
 
             if k == "HP":
+                v = int(v)
                 old = c["hp"]
-                c["hp"] = min(c["max_hp"], c["hp"] + v)
-                actual = c["hp"] - old
-                if actual != 0:
-                    log.append(f"❤️HP {actual:+d}")
+                is_horny = c.get("content_mode") in (MODE_HORNY_MILD, MODE_HORNY_INTENSE)
+                
+                # Horni 模式特殊抵抗扣血机制
+                if v < 0 and is_horny:
+                    deduction_checks = abs(v)
+                    actual_loss = 0
+                    for _ in range(deduction_checks):
+                        lib_check = m.perform_skill_check(c, "LIB", difficulty="normal")
+                        end_check = m.perform_skill_check(c, "END", difficulty="normal")
+                        
+                        # 只要有一个成功就免于这 1 点扣血
+                        if not (lib_check["success"] or end_check["success"]):
+                            actual_loss += 1
+                            
+                        # 这两个防守检定本身也属于锻炼，享受成长判定
+                        for chk in (lib_check, end_check):
+                            growth_log = m.apply_skill_check_growth(c, chk)
+                            if growth_log:
+                                log.append(f"{growth_log}")
+
+                    c["hp"] = max(0, c["hp"] - actual_loss)
+                    actual = c["hp"] - old
+                    if actual != 0:
+                        log.append(f"❤️HP {actual:+d} (抵抗失败)")
+                    else:
+                        log.append(f"❤️HP 抵抗成功！(未扣血)")
+                else:
+                    # Normal / Store 模式原生扣血逻辑
+                    c["hp"] = min(c["max_hp"], c["hp"] + v)
+                    actual = c["hp"] - old
+                    if actual != 0:
+                        log.append(f"❤️HP {actual:+d}")
                 continue
 
             tracker_log = m.apply_tracker_adjustment(c, k, v)
@@ -3646,6 +4096,31 @@ class GamePage(tk.Frame):
 
         self.refresh_panel()
 
+    def filter_valid_checks(self, checks):
+            """核心拦截器：打回所有不属于当前模式的非法属性检定"""
+            if not checks:
+                return[]
+                
+            m = self.app.mode_data()
+            valid = set(m.ATTRIBUTES) | {"LUCK"}
+            for key, cfg in getattr(m, "TRACKERS", {}).items():
+                valid.add(cfg.get("adjustment_key", key))
+            
+            filtered =[]
+            for attr in checks:
+                attr_upper = str(attr).strip().upper()
+                if attr_upper in valid:
+                    filtered.append(attr_upper)
+                else:
+                    print(f"[拦截非法检定] AI 给出了不存在的属性：{attr}")
+            
+            if not filtered and checks:
+                fallback = "INT" if "INT" in valid else (m.ATTRIBUTES[0] if m.ATTRIBUTES else "LUCK")
+                filtered.append(fallback)
+                print(f"[兜底检定] 非法属性替换为：{fallback}")
+                
+            return filtered
+
     def show_choices(self, choices):
         c = self.app.character
         if c.get("content_mode") == CONTENT_STORE:
@@ -3664,10 +4139,10 @@ class GamePage(tk.Frame):
                 continue
             choice = choices[key]
             if isinstance(choice, str):
-                desc, checks, difficulty = choice, [], "normal"
+                desc, checks, difficulty = choice,[], "normal"
             else:
                 desc = choice.get("text", "")
-                checks = choice.get("checks") or []
+                checks = choice.get("checks") or[]
                 difficulty = choice.get("difficulty") or "normal"
 
             if checks:
@@ -3699,14 +4174,21 @@ class GamePage(tk.Frame):
 
         ttk.Button(cf, text="提交", style="Secondary.TButton",
                 command=self.make_custom_choice).pack(side="left")
-        ttk.Button(cf, text="🛠 提示词", style="Ghost.TButton",
-                command=self.edit_system_prompt).pack(side="left", padx=4)
-
+                
+        if c.get("adv_edit_prompt"):
+            ttk.Button(cf, text="🛠 提示词", style="Ghost.TButton",
+                    command=self.edit_system_prompt).pack(side="left", padx=4)
+        if c.get("adv_show_payload"):
+            ttk.Button(cf, text="📄 发送内容", style="Ghost.TButton",
+                    command=self.show_api_payload).pack(side="left", padx=4)
+            
     def make_choice(self, key, desc, checks=None, difficulty="normal"):
         c = self.app.character
         m = self.app.mode_data()
 
         self.append_history(f"　→ 你选择了 {key}：{desc}", "choice")
+
+        checks = self.filter_valid_checks(checks) # <--- 新增这一行
 
         # If skill checks are disabled for this run, or the AI gave no checks,
         # just forward to AI for narrative resolution.
@@ -3801,8 +4283,10 @@ class GamePage(tk.Frame):
         c = self.app.character
         m = self.app.mode_data()
 
+        checks = self.filter_valid_checks(checks) # <--- 新增这一行
+
         if not checks:
-            # AI 觉得不需要鉴定 → 直接推演
+            # AI 觉得不需要检定 → 直接推演
             self.set_loading("正在推演……")
             self.send_to_ai(
                 f"玩家选择了自定义行动：{action_text}。请推演结果。",
@@ -3840,47 +4324,25 @@ class GamePage(tk.Frame):
         elif data.get("has_choice"):
             self.show_choices(data.get("choices") or {})
         else:
-            self.show_next_button()
+                self.show_next_button()
     def do_active_action(self):
-        """让玩家在当前时间点输入主动行动。"""
-        win = tk.Toplevel(self.app)
-        win.title("主动行动")
-        win.geometry("560x360")
-        win.configure(bg=COLORS["bg"])
-        win.transient(self.app)
-        win.grab_set()
+            """让玩家在当前时间点输入主动行动。"""
+            win = tk.Toplevel(self.app)
+            win.title("主动行动")
+            win.geometry("560x360")
+            win.configure(bg=COLORS["bg"])
+            win.transient(self.app)
+            win.grab_set()
 
-        # 顶部标题
-        tk.Label(win, text="🎯 主动行动",
-                bg=COLORS["bg"], fg=COLORS["text"], font=F_HEAD).pack(
-            anchor="w", padx=16, pady=(14, 4)
-        )
+            # 顶部标题
+            tk.Label(win, text="🎯 主动行动",
+                    bg=COLORS["bg"], fg=COLORS["text"], font=F_HEAD).pack(
+                anchor="w", padx=16, pady=(14, 4)
+            )
 
-        # ⭐ 关键：底部按钮先 pack 占位，确保永远可见
-        bottom = tk.Frame(win, bg=COLORS["bg"])
-        bottom.pack(side="bottom", fill="x", padx=16, pady=(0, 16))
-
-    def submit():
-            action = txt.get("1.0", "end").strip()
-            if not action:
-                messagebox.showwarning("提示", "请描述你的行动。", parent=win)
-                return
-            win.destroy()
-
-            c = self.app.character
-            self.append_history(f"　→ 主动行动：{action}", "choice")
-
-            if c.get("content_mode") == CONTENT_STORE:
-                self.set_loading("正在分析你的行动……")
-                self.send_action_check(action)
-            else:
-                self.set_loading("正在分析你的行动……")
-                self.send_action_check_normal(action)
-
-            ttk.Button(bottom, text="执行（Enter）", style="Primary.TButton",
-                    command=submit).pack(side="right")
-            ttk.Button(bottom, text="取消（Esc）", style="Secondary.TButton",
-                    command=win.destroy).pack(side="right", padx=8)
+            # 底部按钮区
+            bottom = tk.Frame(win, bg=COLORS["bg"])
+            bottom.pack(side="bottom", fill="x", padx=16, pady=(0, 16))
 
             # 中间说明
             info = ("描述你在这个时间点想主动做的事。\n"
@@ -3891,7 +4353,7 @@ class GamePage(tk.Frame):
             lbl.pack(anchor="w", fill="x", padx=16, pady=(0, 8))
             auto_wrap(lbl)
 
-            # 文本框（最后 pack，填满剩下的空间）
+            # 文本框 (now correctly in the outer scope!)
             txt = tk.Text(
                 win, height=6, font=F_BODY, wrap="word",
                 bg=COLORS["card"], bd=0, padx=10, pady=8,
@@ -3900,28 +4362,33 @@ class GamePage(tk.Frame):
             txt.pack(fill="both", expand=True, padx=16, pady=8)
             txt.focus_set()
 
+            def submit():
+                action = txt.get("1.0", "end").strip()
+                if not action:
+                    messagebox.showwarning("提示", "请描述你的行动。", parent=win)
+                    return
+                win.destroy()
+
+                c = self.app.character
+                self.append_history(f"　→ 主动行动：{action}", "choice")
+
+                # Route to the correct prompt handling based on the mode
+                if c.get("content_mode") == CONTENT_STORE:
+                    self.set_loading("正在分析你的行动……")
+                    self.send_action_check(action)
+                else:
+                    self.set_loading("正在分析你的行动……")
+                    self.send_action_check_normal(action)
+
+            ttk.Button(bottom, text="执行（Enter）", style="Primary.TButton",
+                    command=submit).pack(side="right")
+            ttk.Button(bottom, text="取消（Esc）", style="Secondary.TButton",
+                    command=win.destroy).pack(side="right", padx=8)
+
             # 快捷键
             win.bind("<Return>", lambda e: (submit(), "break"))
             win.bind("<Control-Return>", lambda e: (submit(), "break"))
             win.bind("<Escape>", lambda e: win.destroy())
-
-    def submit():
-        action = txt.get("1.0", "end").strip()
-        if not action:
-            messagebox.showwarning("提示", "请描述你的行动。")
-            return
-        win.destroy()
-        self.append_history(f"　→ 主动行动：{action}", "choice")
-        self.set_loading("正在推演主动行动……")
-        self.send_to_ai(
-            f"玩家在当前时间点主动采取行动：{action}。"
-            f"请基于角色当前状态推演结果。这是同一个时间点内的额外行动，不要推进时间。"
-            f"如果是重大决定，可以触发 has_choice 给后续选项。",
-            self.on_choice_response,
-        )
-
-        ttk.Button(bottom, text="执行", style="Primary.TButton", command=submit).pack(side="right")
-        ttk.Button(bottom, text="取消", style="Secondary.TButton", command=win.destroy).pack(side="right", padx=8)
 
     def edit_system_prompt(self):
         c = self.app.character
@@ -4159,6 +4626,46 @@ class GamePage(tk.Frame):
             f"{' | '.join(tracker_parts)} | 世界规则：{edu_world}"
         )
 
+    def show_api_payload(self):
+        """弹出一个窗口，显示即将/刚刚发送给 AI 的完整明文。"""
+        content = self.app.character.get("_last_payload",[])
+        
+        if not content:
+            display_text = "（尚未发送过任何请求）"
+        else:
+            lines =[]
+            for msg in content:
+                role = msg.get("role", "unknown").upper()
+                text = msg.get("content", "")
+                lines.append(f"【{role}】\n{text}\n")
+            display_text = "-" * 40 + "\n" + ("\n\n".join(lines))
+            
+        win = tk.Toplevel(self.app)
+        win.title("完整发送内容 (API Payload)")
+        win.geometry("720x560")
+        win.configure(bg=COLORS["bg"])
+        win.transient(self.app)
+        
+        tk.Label(
+            win, text="🔍 完整发送内容", bg=COLORS["bg"], fg=COLORS["text"], font=F_HEAD
+        ).pack(anchor="w", padx=16, pady=(14, 4))
+        
+        info = "这里显示的是最后一次向 API 实际发出的数据包文本。非常适合排查 AI 为什么发疯或者忘了剧情。"
+        lbl = tk.Label(win, text=info, bg=COLORS["bg"], fg=COLORS["subtext"], font=F_SMALL, justify="left")
+        lbl.pack(anchor="w", fill="x", padx=16, pady=(0, 8))
+        
+        txt = scrolledtext.ScrolledText(
+            win, font=F_MONO, wrap="word", bg=COLORS["card"], bd=0, 
+            highlightbackground=COLORS["border"], highlightthickness=1
+        )
+        txt.pack(fill="both", expand=True, padx=16, pady=8)
+        txt.insert("1.0", display_text)
+        txt.config(state="disabled") # 只读模式
+        
+        bottom = tk.Frame(win, bg=COLORS["bg"])
+        bottom.pack(side="bottom", fill="x", padx=16, pady=16)
+        ttk.Button(bottom, text="关闭", style="Primary.TButton", command=win.destroy).pack(side="right")
+
     def send_to_ai(self, user_msg, callback):
         c = self.app.character
 
@@ -4172,28 +4679,45 @@ class GamePage(tk.Frame):
 
         client = self.app.app_state["client"]
         model = self.app.app_state["model"]
+        
+        # ========== 省 TOKEN 核心逻辑 ==========
+        msgs = c["messages"]
+        msgs_to_send =[]
+        
+        if c.get("adv_save_token", True):
+            # 模式开启：提取系统设定 + 最近1200字的纯履历
+            system_msgs = [x for x in msgs if x["role"] == "system"]
+            hist = self.history_text.get("1.0", "end").strip()
+            recent_hist = hist[-1200:] if len(hist) > 1200 else hist
+            if recent_hist:
+                recent_hist = "...\n" + recent_hist
+                
+            combined_user_content = f"【最近的人生履历(供参考剧情背景)】\n{recent_hist}\n\n【当前状态与行动指令】\n{full_msg}"
+            msgs_to_send = system_msgs +[{"role": "user", "content": combined_user_content}]
+        else:
+            # 模式关闭：原始的保留上下文法
+            if len(msgs) > 40:
+                system_msgs =[x for x in msgs if x["role"] == "system"][:4]
+                tail = msgs[-30:]
+                msgs_to_send = system_msgs + tail
+            else:
+                msgs_to_send = msgs
+                
+        c["_last_payload"] = msgs_to_send  # 记录当前即将发送的内容供玩家查看
 
         def worker():
+            raw_text = "（API 请求失败，未获取到返回内容或网络超时）"
             try:
-                msgs = c["messages"]
-
-                if len(msgs) > 40:
-                    system_msgs = [x for x in msgs if x["role"] == "system"][:4]
-                    tail = msgs[-30:]
-                    msgs_to_send = system_msgs + tail
-                else:
-                    msgs_to_send = msgs
-
                 resp = client.chat.completions.create(
                     model=model,
                     messages=msgs_to_send,
                     temperature=0.9,
                 )
 
-                text = resp.choices[0].message.content
-                c["messages"].append({"role": "assistant", "content": text})
+                raw_text = resp.choices[0].message.content
+                c["messages"].append({"role": "assistant", "content": raw_text})
 
-                d = parse_ai_json(text)
+                d = parse_ai_json(raw_text)
 
                 self.after(0, lambda: callback(d))
 
@@ -4204,8 +4728,8 @@ class GamePage(tk.Frame):
                     c["messages"].pop()
 
                 err = str(e)
-                # 把这次请求挂起，等用户点重试再重发
                 self._pending_retry = (user_msg, callback)
+                self._last_raw_response = raw_text  
 
                 def show_error():
                     messagebox.showerror(
@@ -4232,33 +4756,36 @@ class GamePage(tk.Frame):
         else:
             self.show_next_button()
 
-def send_quick_query(self, prompt, callback,
-                    system_msg="Return ONLY a JSON object. No prose."):
-    """单次 AI 询问，不写入对话历史。"""
-    if not self.app.app_state.get("connected"):
-        callback(None)
-        return
+    def send_quick_query(self, prompt, callback,
+                        system_msg="Return ONLY a JSON object. No prose."):
+        """单次 AI 询问，不写入对话历史。"""
+        if not self.app.app_state.get("connected"):
+            callback(None)
+            return
 
-    client = self.app.app_state["client"]
-    model = self.app.app_state["model"]
+        client = self.app.app_state["client"]
+        model = self.app.app_state["model"]
+        
+        msgs_to_send =[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": prompt},
+        ]
+        self.app.character["_last_payload"] = msgs_to_send
 
-    def worker():
-        try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.4,
-                max_tokens=300,
-            )
-            data = parse_ai_json(resp.choices[0].message.content)
-            self.after(0, lambda: callback(data))
-        except Exception:
-            self.after(0, lambda: callback(None))
+        def worker():
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=msgs_to_send,
+                    temperature=0.4,
+                    max_tokens=300,
+                )
+                data = parse_ai_json(resp.choices[0].message.content)
+                self.after(0, lambda: callback(data))
+            except Exception:
+                self.after(0, lambda: callback(None))
 
-    threading.Thread(target=worker, daemon=True).start()
+        threading.Thread(target=worker, daemon=True).start()
 
 
     def attempt_delay_commission(self, com_id):
@@ -4317,6 +4844,22 @@ def send_quick_query(self, prompt, callback,
 
         m.advance_time(c)
         start_logs = m.apply_turn_start_effects(c)
+        
+        # ========================================================
+        # 检查是否到达预设的营业期限
+        # ========================================================
+        if c.get("time_tick", 0) >= c.get("store_end_tick", 120):
+            self.append_history("\n━━━ 营业期满！ ━━━", "death")
+            self.append_history(f"（到达预定结束时间：第 {c['store_end_tick']} 旬）")
+            self.refresh_panel()
+            self.clear_control()
+            ttk.Button(
+                self.control_frame,
+                text="📜 查看店铺生涯总结",
+                style="Primary.TButton",
+                command=self.request_summary,
+            ).pack(pady=14)
+            return
 
         rnd = c.get("store_round", 0)
 
@@ -4337,15 +4880,67 @@ def send_quick_query(self, prompt, callback,
             self.show_store_tone_choice()
             return
 
-        # rnd >= 3 正常循环
+        # ========================================================
+        # rnd >= 3 正常循环：新的麻烦判定链 (HEAT -> MYST -> REPT/INTE + HMR)
+        # ========================================================
+        self.append_history("\n" + m.format_history_header(c), "year")
+        if start_logs:
+            self.append_history(f"　〔{' / '.join(start_logs)}〕", "adj")
+
+        heat = c.get("heat", 0)
+        myst = c.get("mystery", 25)
+        
+        trouble_hits = False # 记录最终是否触发了麻烦
+
+        # 1. 检定 HEAT (抛 d100，小于等于 HEAT 则被注意到)
+        if random.randint(1, 100) <= heat:
+            # 被注意到了！
+            # 2. 检定 MYSTERY (抛 d100，小于等于 MYST 则成功隐藏)
+            if random.randint(1, 100) <= myst:
+                self.append_history("　似乎有人在打你的主意，但没抓到你的尾巴。")
+            else:
+                # 藏不住了，进行最后的摆脱检定
+                # 组1：名声(劣势) 或 操守(劣势)
+                rept_check = m.perform_skill_check(c, "REPUTATION", advantage_override="disadvantage")
+                inte_check = m.perform_skill_check(c, "INTEGRITY", advantage_override="disadvantage")
+                group1_pass = rept_check["success"] or inte_check["success"]
+                
+                # 组2：人脉(普通)
+                hmr_check = m.perform_skill_check(c, "HMR", difficulty="normal")
+                group2_pass = hmr_check["success"]
+
+                # 打印检定过程给玩家看
+                self.append_history("　【遭遇麻烦：危机逃脱检定】", "adj")
+                self.append_history(f"　{m.format_check_log(rept_check)}", "adj")
+                self.append_history(f"　{m.format_check_log(inte_check)}", "adj")
+                self.append_history(f"　{m.format_check_log(hmr_check)}", "adj")
+
+                if group1_pass and group2_pass:
+                    # 逃脱成功！找个熟人背书
+                    active_clients = m.get_active_clients(c)
+                    if active_clients:
+                        savior = random.choice(active_clients)
+                        savior_name = savior.get("name", "一个老朋友")
+                        savior["relationship"] = "感激"
+                    else:
+                        savior_name = "一个老朋友"
+                        
+                    self.append_history(f"　麻烦差点找上了你，但是{savior_name}帮你解决了问题。")
+                else:
+                    # 彻底失败，麻烦上门
+                    trouble_hits = True
+
+        if trouble_hits:
+            # 将处理权交给 AI
+            self.trigger_store_event("k", [])
+            return
+
+        # 如果没遇到麻烦，或者成功化解了麻烦，才判断这旬有没有委托
         if random.random() < c.get("event_chance", 0.5):
-            kind = m.roll_event_kind(c)
-            self.trigger_store_event(kind, start_logs)
+            kind = m.roll_event_kind(c) # 抽取新客户(n)或老客户(l)
+            self.trigger_store_event(kind, [])
         else:
-            self.append_history("\n" + m.format_history_header(c), "year")
-            if start_logs:
-                self.append_history(f"　〔{' / '.join(start_logs)}〕", "adj")
-            self.append_history("　这一旬没有新的事件。你可以自由进行行动。")
+            self.append_history("　风平浪静......你可以自由进行行动。")
             self.refresh_panel()
             self.show_next_button()
 
@@ -4542,10 +5137,10 @@ def send_quick_query(self, prompt, callback,
                 continue
             choice = choices[key]
             if isinstance(choice, str):
-                desc, checks, difficulty = choice, [], "normal"
+                desc, checks, difficulty = choice,[], "normal"
             else:
                 desc = choice.get("text", "")
-                checks = choice.get("checks", []) or []
+                checks = choice.get("checks", []) or[]
                 difficulty = choice.get("difficulty", "normal")
 
             check_tag = "/".join(checks) if checks else "?"
@@ -4575,8 +5170,14 @@ def send_quick_query(self, prompt, callback,
         self.custom_entry.pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(cf, text="提交", style="Secondary.TButton",
                 command=self.make_store_custom_choice).pack(side="left")
-        ttk.Button(cf, text="🛠 提示词", style="Ghost.TButton",
-                command=self.edit_system_prompt).pack(side="left", padx=4)
+                
+        c = self.app.character
+        if c.get("adv_edit_prompt"):
+            ttk.Button(cf, text="🛠 提示词", style="Ghost.TButton",
+                    command=self.edit_system_prompt).pack(side="left", padx=4)
+        if c.get("adv_show_payload"):
+            ttk.Button(cf, text="📄 发送内容", style="Ghost.TButton",
+                    command=self.show_api_payload).pack(side="left", padx=4)
 
     def make_store_choice(self, key, desc, checks, difficulty):
         c = self.app.character
@@ -4594,6 +5195,7 @@ def send_quick_query(self, prompt, callback,
             if com.get("pending_advantage"):
                 advantage_override = "advantage"
                 com["pending_advantage"] = False
+        checks = self.filter_valid_checks(checks) # <--- 新增这一行
 
         if not checks:
             checks = ["INT"]
@@ -4632,24 +5234,52 @@ def send_quick_query(self, prompt, callback,
         self.set_loading("正在分析你的行动……")
         self.send_action_check(text)
 
-    def send_action_check(self, action_text):
+    def send_action_check_normal(self, action_text):
+        """普通/性压抑模式：先问 AI 用什么属性，再投骰子。"""
         c = self.app.character
         m = self.app.mode_data()
 
-        def callback(data):
-            if data:
-                checks = data.get("checks") or ["INT"]
-                difficulty = data.get("difficulty") or "normal"
-            else:
-                messagebox.showwarning(
-                    "提示",
-                    "AI 决定鉴定属性失败，将用 INT 鉴定 normal。",
-                )
-                checks = ["INT"]
-                difficulty = "normal"
-            self.execute_custom_action(action_text, checks, difficulty)
+        if not self.app.app_state.get("connected"):
+            self.set_loading("正在推演……")
+            self.send_to_ai(
+                f"玩家选择了自定义行动：{action_text}。请推演结果。",
+                self.on_choice_response,
+            )
+            return
 
-        self.send_quick_query(m.build_action_check_prompt(c, action_text), callback)
+        client = self.app.app_state["client"]
+        model = self.app.app_state["model"]
+        prompt = m.build_action_check_prompt(c, action_text)
+        
+        msgs_to_send =[
+            {"role": "system", "content": "Return ONLY a JSON object describing skill checks. No prose."},
+            {"role": "user", "content": prompt},
+        ]
+        c["_last_payload"] = msgs_to_send
+
+        def worker():
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=msgs_to_send,
+                    temperature=0.3,
+                    max_tokens=200,
+                )
+                data = parse_ai_json(resp.choices[0].message.content)
+                checks = data.get("checks") or[]
+                difficulty = data.get("difficulty") or "normal"
+                self.after(0, lambda: self.execute_normal_custom_action(action_text, checks, difficulty))
+            except Exception as e:
+                err = str(e)
+                def fallback():
+                    self.set_loading("正在推演……")
+                    self.send_to_ai(
+                        f"玩家选择了自定义行动：{action_text}。请推演结果。",
+                        self.on_choice_response,
+                    )
+                self.after(0, fallback)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def execute_custom_action(self, action_text, checks, difficulty):
         c = self.app.character
@@ -4665,6 +5295,9 @@ def send_quick_query(self, prompt, callback,
             if com.get("pending_advantage"):
                 advantage_override = "advantage"
                 com["pending_advantage"] = False
+                checks = self.filter_valid_checks(checks) # <--- 新增这一行
+                if not checks:
+                    checks =["INT"]
 
         check_results = []
         for attr in checks:
@@ -4708,15 +5341,42 @@ def send_quick_query(self, prompt, callback,
             if com_id and com_id in c.get("store_commissions", {}):
                 com = c["store_commissions"][com_id]
                 outcome = se.get("outcome", "ongoing")
-                if outcome in ("resolved", "failed"):
-                    com["status"] = outcome
+                if outcome in ("resolved", "failed", "partial"):
+                    # 状态修改
+                    com["status"] = outcome if outcome != "partial" else "resolved"
                     com["resolution"] = (data.get("narrative", "") or "")[:160]
+                    if outcome == "partial":
+                        com["resolution"] = "(部分达成) " + com["resolution"]
+                    
                     c["_active_commission_id"] = None
-                elif outcome == "partial":
-                    com["status"] = "resolved"
-                    com["resolution"] = "(部分达成) " + (data.get("narrative", "") or "")[:160]
-                    c["_active_commission_id"] = None
+                    
+                    # ========================================================
+                    # 核心机制：委托结案/失败的硬编码奖惩
+                    # ========================================================
+                    import random
+                    
+                    if outcome in ("resolved", "partial"):
+                        # 成功完成：HMR, CRE, INT 各获得 1 次 1d6 的成长检定
+                        for attr in ["HMR", "CRE", "INT"]:
+                            attr_val = c["final_attributes"].get(attr, 30)
+                            # COC式成长检定：投掷 d100，大于等于当前属性才成长
+                            growth_roll = random.randint(1, 100)
+                            if growth_roll >= attr_val:
+                                gain = m.roll_dice("1d6")
+                                c["final_attributes"][attr] = min(100, attr_val + gain)
+                                self.append_history(f"　🌟 结案历练：你的 {attr} 提升了 {gain} 点！", "choice")
+                                
+                    elif outcome == "failed":
+                        # 失败：HEAT 固定增加 1d6，HMR 固定折损 1d6
+                        heat_gain = m.roll_dice("1d6")
+                        c["heat"] = min(100, c.get("heat", 0) + heat_gain)
+                        
+                        hmr_loss = m.roll_dice("1d6")
+                        c["final_attributes"]["HMR"] = max(1, c["final_attributes"].get("HMR", 30) - hmr_loss)
+                        
+                        self.append_history(f"　⚠️ 委托失败：风波(HEAT) 增加了 {heat_gain} 点，人脉(HMR) 折损了 {hmr_loss} 点！", "death")
 
+            # 处理客户关系变化
             client_id = c.get("_active_client_id")
             if client_id and client_id in c.get("store_clients", {}):
                 rel = se.get("client_relationship_after")

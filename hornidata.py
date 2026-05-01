@@ -7,7 +7,7 @@ from data import (
     SCENES, GENDERS,
     RARITY_CONFIG, RARITY_WEIGHTS,
     roll_dice, filter_pool, draw_talents,
-    ASSET_TIERS, FAME_TIERS, KNOWLEDGE_TIERS, EDU_TIERS,
+    ASSET_TIERS, FAME_TIERS, EXPE_TIERS, KNOW_TIERS, # <--- 改这里
     get_tier, parse_ai_json,
     MODE_HORNY_MILD, MODE_HORNY_INTENSE,
     perform_skill_check, apply_skill_check_growth,
@@ -18,14 +18,15 @@ from data import (
 # ============================================================
 # 性压抑模式专用属性
 # ============================================================
-ATTRIBUTES = ["LIB", "TEC", "APP", "END", "SEN", "LOV", "EXP", "CRE"]
+ATTRIBUTES =["STR", "LIB", "TEC", "APP", "END", "SEN", "LOV", "EXP", "CRE"]
 
 ATTR_DESC = {
-    "LIB": "性欲", "TEC": "体型", "APP": "外貌", "END": "体力",
+    "STR": "力量", "LIB": "性欲", "TEC": "体型", "APP": "外貌", "END": "体力",
     "SEN": "敏感", "LOV": "爱情", "EXP": "智力", "CRE": "家境",
 }
 
 ATTR_LONG_DESC = {
+    "STR": "肌肉强度，不仅影响体力劳动和战斗力，有时也决定了绝对的强制力。",
     "LIB": "天生欲望强度和“硬件”，决定一年里能折腾几次。",
     "TEC": "身材和身高大小。",
     "APP": "外貌，决定能勾搭到什么级别的人。",
@@ -36,8 +37,8 @@ ATTR_LONG_DESC = {
     "CRE": "家境——是的，这玩意永远是核心变量。",
 }
 
-# 性压抑模式独立点数池（普通版150；intense版200）
-POINTS_POOL_DEFAULT = 150
+# 性压抑模式独立点数池
+POINTS_POOL_DEFAULT = 200
 POINTS_POOL_INTENSE = 200
 
 # ============================================================
@@ -985,17 +986,20 @@ TALENT_POOL = [
 def get_skill_block(c):
     if c.get("skill_checks_enabled", True):
         return """
-【🎲 鉴定系统（重要选择由骰子决定）】
-本游戏中，**有失败可能的选择**由程序投 1d100 vs 属性来判定，**你不再决定胜负**。
-- 你给出的每个选项可以包含两个可选字段：`checks` 和 `difficulty`。
-- checks: 1-2 个属性键（LIB, TEC, APP, END, SEN, LOV, EXP, CRE, LUCK）。
-- difficulty: "easy" / "normal" / "hard"。
-  · easy   = 双骰取优（更容易过）
-  · normal = 单骰
-  · hard   = 双骰取劣（极难，**只用在真正棘手的情境**）
-- 如果选项是纯偏好选择（比如"选什么大学专业"），省略 checks（设为 []）或不写。
-- 一次给玩家的 3 个选项里，建议 1-2 个有 checks、1 个左右是纯偏好。
-- 程序投完后会发回"完胜/险胜/完败"，你**只负责按结果写故事**。
+【🎲检定系统（重要选择由骰子决定）】
+本游戏中，有失败可能的选择由程序投骰判定，你不再决定胜负。
+- 你可以要求判定这 13 个属性：（STR, LIB, TEC, APP, END, SEN, LOV, EXP, CRE, LUCK, ASSET, FAME, EXPE, KNOW）。
+- choices.checks 填 1 和少数情况下最多 2 个属性键，difficulty 填 "easy"/"normal"/"hard"。
+- 纯偏好选择不填 checks。
+- 不困难的行动也不填checks。
+- 你不需要每次都输出各一个easy/normal/hard。记住你首先需要保证代入感而不是做一个无情的鉴定机器。
+- 记住checks本身就代表这个行为有一定难度。作为参考：
+主角决定晚上去找某个人- no check
+主角决定和某个人在正常的情况下搭话 - no check
+深夜的房子安静无声，主角将耳朵贴在门上。（因为环境安静）- easy DEX + INT
+主角需要翻过一堵约两米高的砖墙，墙面有些凸起的砖块可作为支撑点，但下着小雨略显湿滑。- normal DEX
+主角试图说服旅馆老板透露昨晚那位神秘客人的房间号，对方有些警惕但并非完全敌对。- normal APP
+对面坐着的是一位老练的政客，他面带微笑、语气平和，每一句话都滴水不漏。主角想要看穿他背后的意图- hard INT
 """
     else:
         return """
@@ -1057,9 +1061,11 @@ def build_system_prompt(c):
 - 14 岁以下：仅做情感萌芽、暗恋、青涩描写，绝无性内容。
 - 14~17 岁：可有亲吻、暧昧、青春期觉醒，**不写性器官与性行为细节**。
 - 18 岁起：放开。
-【⛔ 属性锁定】
-- LIB / TEC / APP / END / SEN / LOV / EXP / CRE 是出生时定的，**任何事件不得改动**。
-- 你能改的只有：HP / ASSET / FAME / KNOWLEDGE / EDU。
+【⛔ 规则：核心属性与派生属性（基于 1-100 制）】
+- 核心八大属性出生即固定，不得改动。
+- 派生属性包含：ASSET(资产)、FAME(名气)、EXPE(经验)、KNOW(知识)。
+- 严禁直接加派生属性！如果因为剧情需要提升，请在 adjustments 里使用后缀 `_GROWTH` 给予检定。例如：`"FAME_GROWTH": 2`。
+- 直接扣减是允许的：如果角色破产被骗，可输出 `"ASSET": -20`。
 【❤️ HP】
 - HP_MAX = (SIZ + CON) // 10 = {max_hp}。系统每年自然恢复 1 HP。
 - 普通感冒 0~-1，濒死/重大灾难 -5~-10。HP ≤ 0 即死亡。
@@ -1145,39 +1151,15 @@ TIME_CONFIG = {
 }
 
 TRACKERS = {
-    "assets": {
-        "label": "资产",
-        "adjustment_key": "ASSET",
-        "initial": 0,
-        "tiers": ASSET_TIERS,
-        "unlock_age": 12,
-        "locked_text": "（未解锁）",
-    },
-    "fame": {
-        "label": "名气",
-        "adjustment_key": "FAME",
-        "initial": 0,
-        "tiers": FAME_TIERS,
-    },
-    "knowledge": {
-        "label": "知识",
-        "adjustment_key": "KNOWLEDGE",
-        "initial": 0,
-        "tiers": KNOWLEDGE_TIERS,
-        "unlock_age": 4,
-        "locked_text": "（未解锁）",
-    },
-    "edu": {
-        "label": "学历",
-        "adjustment_key": "EDU",
-        "initial": 0,
-        "tiers": EDU_TIERS,
-    },
+    "assets": {"label": "资产", "adjustment_key": "ASSET", "initial": 1, "tiers": ASSET_TIERS, "unlock_age": 4, "locked_text": "（未成年）"},
+    "fame":   {"label": "名声", "adjustment_key": "FAME", "initial": 10, "tiers": FAME_TIERS},
+    "expe":   {"label": "经验", "adjustment_key": "EXPE", "initial": 1, "tiers": EXPE_TIERS, "unlock_age": 4, "locked_text": "（未成年）"},
+    "know":   {"label": "知识", "adjustment_key": "KNOW", "initial": 1, "tiers": KNOW_TIERS},
 }
 
-EDU_AUTO_START_AGE = 1
-EDU_AUTO_END_AGE = 18
-EDU_DEDUCT_CAP = 10
+# 引入 data 的成长挂载逻辑
+from data import apply_turn_start_effects, apply_tracker_adjustment, init_trackers
+
 
 
 def get_time_config(c):
@@ -1242,48 +1224,8 @@ def calculate_max_hp(final_attributes):
     return max(1, (final_attributes.get("END", 50) + final_attributes.get("LIB", 50)) // 10)
 
 
-def apply_turn_start_effects(c):
-    logs = []
-
-    if c.get("hp", 0) < c.get("max_hp", 0):
-        old = c["hp"]
-        c["hp"] = min(c["max_hp"], c["hp"] + 1)
-        if c["hp"] != old:
-            logs.append(f"❤️HP +{c['hp'] - old}")
-
-    age = int(get_character_age(c))
-    if c.get("has_compulsory_edu") and EDU_AUTO_START_AGE <= age <= EDU_AUTO_END_AGE:
-        c["edu"] = c.get("edu", 0) + 1
-        logs.append("学历 +1")
-
-    return logs
-
-
-def apply_tracker_adjustment(c, adjustment_key, value):
-    value = int(value)
-
-    for tracker_key, cfg in TRACKERS.items():
-        if cfg.get("adjustment_key") != adjustment_key:
-            continue
-
-        if tracker_key == "edu":
-            age = int(get_character_age(c))
-            if value < 0 and c.get("has_compulsory_edu") and EDU_AUTO_START_AGE <= age <= EDU_AUTO_END_AGE:
-                remaining_cap = EDU_DEDUCT_CAP - c.get("edu_disrupted", 0)
-                actual = max(value, -remaining_cap)
-                if actual == 0:
-                    return None
-                c[tracker_key] = c.get(tracker_key, 0) + actual
-                c["edu_disrupted"] = c.get("edu_disrupted", 0) + (-actual)
-                return f"{cfg['label']} {actual:+d}"
-
-        c[tracker_key] = c.get(tracker_key, 0) + value
-        return f"{cfg['label']} {value:+d}"
-
-    return None
-
 def build_action_check_prompt(c, action_text):
-    """性压抑模式版本：用 LIB/TEC/APP/END/SEN/LOV/EXP/CRE/LUCK。"""
+    """性压抑模式版本：用 LIB/TEC/APP/END/SEN/LOV/EXP/CRE/LUCK/ASSET/FAME/EXPE/KNOW。"""
     attrs_text = "、".join(ATTRIBUTES + ["LUCK"])
     return f"""玩家想在当前时间点主动做一件事。你只需要判断需要哪些属性鉴定。
 玩家行动：{action_text}

@@ -16,6 +16,11 @@ TIMESTAMP_PRESETS = {
         "tick_label": "月",
         "age_step": 1 / 12,
     },
+    "weekly": {               # <--- 新增这段
+        "label": "每周",
+        "tick_label": "周",
+        "age_step": 1 / 52,
+    },
 }
 
 
