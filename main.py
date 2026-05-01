@@ -69,7 +69,7 @@ from storedata import (
     init_store_state,
 )
 
-VERSION = "v0.7.1.1 MAGNOLIA"
+VERSION = "v0.7.1.1 YAWNINGLION"
 
 TALENT_USER_PATH = os.path.join(os.path.expanduser("~"), ".ai_life_remake_talents.json")
 
@@ -1217,12 +1217,12 @@ class DisclaimerPage(tk.Frame):
         changelog_text = (
             f"{VERSION} 更新：\n"
             "- 健康发行版，删除和隐藏了部分不合适的内容。\n\n"
-            "v0.7.1 BOABAB 更新：\n"  
+            "v0.7.1 RUNGORUN 更新：\n"  
             "- 添加了设置自动保存功能。现在许多设置会自动保存了，你下一次打开游戏不需要重新调试一遍。\n"
             "- 这个功能其实0.7.0就做好了。但是我觉得它太伟大了，不亚于山顶洞人第一次发现石头可以丢。\n"
             "- 所以我给了它一个专门的版本供在更新日志里面。\n"
             "- 优化了UI显示，将软件界面从2016年升级到了2018年。\n\n"
-            "v0.7.0 HYACINTH 更新：\n"   
+            "v0.7.0 INVITE 更新：\n"   
             "- 正式添加了CC0的协议释出。\n"
             "- 添加了通过传统派3d6*5骰点来配置属性的功能。此功能可以用于所有模式。\n"
             "- 添加了高级功能：省token模式。可以降低一些因为上下文产生的消费。\n"
@@ -1233,7 +1233,7 @@ class DisclaimerPage(tk.Frame):
             "- 优化了返回报错内容，现在里面包含api的话会自动删除。少量提高安全性。\n"
             "- 将JUNIPER版本中更新的计算方法适配进了所有模式中。\n"
             "- 修复了微调模式中“周”的时间单位无法被使用的问题。\n\n"
-            "v0.6.9/0.7.0 pre-patch JUNIPER 更新：\n"   
+            "v0.6.9/0.7.0 pre-patch EVOLUTIONERA 更新：\n"   
             "- 添加了AI返回报错时，可以查看返回内容的选项。\n"
             "- 重做了所有名声/资产等属性，现在它们都是基于100的可检定属性了。\n"
             "- 重做了0-18岁的义务教育，资产成长等。现在CRE将会是很重要的属性了。\n"
@@ -1242,44 +1242,44 @@ class DisclaimerPage(tk.Frame):
             "- 优化API链接界面。可同时保存的api数量减少为两个。\n"
             "- 修复了第一次打开特质编辑器无法看到已有特质的bug。\n"
             "- 通马桶模式暂时还没有做d100适配的浮动属性。\n\n"
-            "v0.6.3 MAPLE 更新：\n"   
+            "v0.6.3 YUBIKIRI 更新：\n"   
             "- 修复了BANYAN版本中主动行动（又）无法实际确认行动的问题。\n"
             "- 修复了通马桶模式中出现AttributeError的问题。\n\n"
-            "v0.6.2 BANYAN 更新：\n"           
+            "v0.6.2 SAIKA 更新：\n"           
             "- 添加了可以让用户在正常模式中是否启用骰子功能的选择项。\n"
             "- 添加了针对低级自动爬虫抓取本地加密密匙的防护。少量提高安全性。\n"
-            "- 修复了POPLAR版本中骰子功能超出代码定义范围的bug。\n"
-            "v0.6.1 POPLAR 更新：\n"
+            "- 修复了POPLAR版本中骰子功能超出代码定义范围的bug。\n\n"
+            "v0.6.1 IHATETOTELLYOU 更新：\n"
             "- 对所有模式里的选择检定都做了CARNATION更新中的成功/失败检定功能适配。\n"
             "- 小幅上调所有模式中的自由属性点至180点。\n"
             "- 优化了通马桶模式的技术细节。\n"
             "- 对四个情景都进行了通马桶模式的天赋池适配。\n\n"
-            "v0.6.0 CARNATION 更新：\n"
+            "v0.6.0 REVERSE 更新：\n"
             "- 添加了我要通马桶模式。现在你可以扮演一名神秘npc来接取和解决委托了。\n"
             "- 修复了主动行动无法实际确认行动的问题。\n"
             "- 修复了数个其他bug。\n"
             "- 优化api保存方法为本地加密。少量提高安全性。\n\n"
-            "v0.5.5 MANGROVE 更新：\n"
+            "v0.5.5 UTOPIOSPHERE 更新：\n"
             "- 添加了自己填写天赋的能力。\n"
             "- 添加了回合中主动行动的选项。\n"
             "- api链接QOL优化，现在你可以同时保存三个不同的api了。\n"
             "- 优化了界面至clamshell，软件年代从1996进化到了2016。\n"
             "- 修复了AI报错后重试会推进时间线的bug。\n\n"
-            "v0.5.1 OAK 更新：\n"
+            "v0.5.1 PLATINUM 更新：\n"
             "- 修复了 Fine Mode 配置时间轴错误的 bug。\n"
             "- 修复了时间刻度显示一直是英文键名的 bug。\n"
             "- 修复了IdentityPage 的「上一步」会跳到错误页面的 bug。\n\n"
-            "v0.5.0 DANDELION 更新：\n"
+            "v0.5.0 UNDO 更新：\n"
             "- 添加了导入记录功能，配合之前的导出记录功能可以实现保存了。\n"
             "- 添加了微调模式，现在你可以调整每回合的时间跨度，起始年龄和结束年龄了！\n"
             "- 铁人模式/测试模式/普通模式现在改为在故事设定之上的调整条件。\n"
             "- QOL改善和底层代码优化。\n\n"
-            "v0.4.1 ACACIA 更新：\n"
+            "v0.4.1 LIGHTPOLLUTION 更新：\n"
             "- 修改了天赋系统-从单纯的抽三变为了抽六选三。\n"
             "- 在一局人生结束之后和游戏进行时都增加了导出记录为.txt的功能。\n"
             "- 小幅上调了两种模式下的属性点数量。\n"
             "- 微调了AI给予选项的频率。\n\n"
-            "v0.4.0 TULIP 更新：\n"
+            "v0.4.0 NINEPOINTEIGHT 更新：\n"
             "- 第一个新架构的版本\n\n\n\n\n\n\n\n\n\n"
             "我永远喜欢UMP45"
         )
@@ -1890,7 +1890,7 @@ class IdentityPage(tk.Frame):
 
         tk.Label(
             card,
-            text="额外信息（可选，会发给 AI 参考）",
+            text="额外信息（和角色无关的信息，世界观等。）",
             bg=COLORS["card"],
             fg=COLORS["text"],
             font=F_SUB,
@@ -3254,7 +3254,7 @@ class ConfirmPage(tk.Frame):
         )
         self.display.pack(fill="both", expand=True, padx=4, pady=(8, 4))
 
-        tk.Label(inner, text="背景故事（可选）", bg=COLORS["bg"], fg=COLORS["subtext"], font=F_SMALL).pack(
+        tk.Label(inner, text="角色背景故事（可选）", bg=COLORS["bg"], fg=COLORS["subtext"], font=F_SMALL).pack(
             anchor="w", pady=(8, 4)
         )
 
