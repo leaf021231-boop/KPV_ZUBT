@@ -1071,19 +1071,18 @@ def build_system_prompt(c):
 - 普通感冒 0~-1，濒死/重大灾难 -5~-10。HP ≤ 0 即死亡。
 - 在此模式下里，过量/实在过于刺激的体验可以酌情扣除1-2点HP。
 【其他派生】
-- ASSET / FAME / KNOWLEDGE 整数变化。
-- EDU 1~18 岁系统自动 +1（intense 模式已经是 18），辍学等可给负数。
+- 派生属性（ASSET / FAME / EXPE / KNOW）可接受整数变化。
 {skill_block}
 【输出格式】（严格 JSON，只输出 JSON）
 {{
-  "narrative": "本年事件描述（一句话到 400 字之间，可以露骨但要有文笔）",
+  "narrative": "本年事件描述（一句话到 300 字之间）",
   "has_choice": false,
   "choices": {{
-    "A": {{"text": "选项A描述", "checks": ["LIB"], "difficulty": "normal"}},
-    "B": {{"text": "选项B描述", "checks": ["APP","SEN"], "difficulty": "hard"}},
-    "C": {{"text": "选项C描述（纯偏好）", "checks": [], "difficulty": null}}
+    "A": {{"text": "Lorem Ipsum", "checks": ["LIB"], "difficulty": ""}},
+    "B": {{"text": "Lorem Ipsum", "checks": ["APP","SEN"], "difficulty": "easy"}}
+    "C": {{"text": "Lorem Ipsum", "checks": ["STR"], "difficulty": "easy"}}
   }},
-  "adjustments": {{"HP": -1, "ASSET": 0, "FAME": 0, "KNOWLEDGE": 0, "EDU": 0}},
+  "adjustments": {{"HP": -2, "FAME_GROWTH": 1, "ASSET": -10}},
   "alive": true,
   "cause_of_death": null
 }}
@@ -1158,7 +1157,70 @@ TRACKERS = {
 }
 
 # 引入 data 的成长挂载逻辑
-from data import apply_turn_start_effects, apply_tracker_adjustment, init_trackers
+from data import apply_turn_start_effects, init_trackers
+
+# 2. 在 TRACKERS 定义下方，加入这段防大小写 Bug 的专属处理函数
+def apply_tracker_adjustment(c, adjustment_key, value):
+    """
+    处理 AI 给的变动。支持 _GROWTH (给予检定次数) 和负数直接扣除 (带减伤机制)
+    """
+    # 【关键修复】强制大写，防止 AI 输出 "fame_growth" 导致判定失效
+    adjustment_key = str(adjustment_key).upper() 
+    try:
+        value = int(value)
+    except ValueError:
+        return None
+    
+    # 1. 检查是否是 GROWTH 检定奖励
+    if adjustment_key.endswith("_GROWTH"):
+        base_key = adjustment_key.replace("_GROWTH", "")
+        tracker_key, cfg = None, None
+        
+        for tk, cf in TRACKERS.items():
+            if cf.get("adjustment_key") == base_key:
+                tracker_key, cfg = tk, cf
+                break
+                
+        if not tracker_key:
+            return None
+            
+        total_gain = 0
+        for _ in range(max(1, value)):
+            current_val = c.get(tracker_key, 1)
+            # COC 风格成长判定
+            if current_val < 100 and roll_dice("1d100") > current_val:
+                total_gain += roll_dice("1d6")
+                
+        if total_gain > 0:
+            c[tracker_key] = min(100, c.get(tracker_key, 1) + total_gain)
+            return f"{cfg['label']}突破 +{total_gain}"
+        else:
+            return f"{cfg['label']}毫无长进"
+
+    # 2. 正常数值操作（处理扣减）
+    for tracker_key, cfg in TRACKERS.items():
+        if cfg.get("adjustment_key") != adjustment_key:
+            continue
+            
+        old = c.get(tracker_key, cfg.get("initial", 1))
+        if value < 0:
+            deduction = abs(value)
+            if old <= 15:
+                deduction = max(1, deduction // 5)
+            elif old <= 35:
+                deduction = max(1, deduction // 2)
+            new = max(1, old - deduction) # 保底为 1
+        else:
+            new = min(100, old + value)
+            
+        actual = new - old
+        if actual == 0:
+            return None
+            
+        c[tracker_key] = new
+        return f"{cfg['label']} {actual:+d}"
+        
+    return None
 
 
 

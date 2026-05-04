@@ -49,6 +49,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, filedialog
 from openai import OpenAI
 import data as normal_data
+import hornyintensedata # <--- NEW
 import hornidata
 import storedata
 import finedata
@@ -69,7 +70,7 @@ from storedata import (
     init_store_state,
 )
 
-VERSION = "v0.7.1.1 YAWNINGLION"
+VERSION = "v0.7.5.1 ANGELICSPHERE"
 
 TALENT_USER_PATH = os.path.join(os.path.expanduser("~"), ".ai_life_remake_talents.json")
 
@@ -118,6 +119,7 @@ DIFF_IRONMAN = MODE_IRONMAN
 CONTENT_MODE_MODULES = {
     CONTENT_NORMAL: normal_data,
     CONTENT_HORNY: hornidata,
+    MODE_HORNY_INTENSE: hornyintensedata, # <--- NEW
     CONTENT_STORE: storedata,
 }
 
@@ -350,8 +352,12 @@ class TalentEditor(tk.Toplevel):
         ("negative", "负面"), ("common", "普通"),
         ("rare", "稀有"), ("legendary", "传奇"), ("wildcard", "特殊"),
     ]
-    #MODE_OPTIONS = [("Normal", "普通"), ("Horni", "性压抑")]
-    MODE_OPTIONS = [("Normal", "普通"), ("store", "通马桶模式")]
+    # ================= 修改这里：加入新的模式 =================
+    MODE_OPTIONS = [
+        ("Normal", "普通"), 
+        ("Store", "通马桶(Store)")
+    ]
+    # =========================================================
 
     def __init__(self, parent, app):
         super().__init__(parent)
@@ -406,6 +412,11 @@ class TalentEditor(tk.Toplevel):
 
         ttk.Button(head, text="🗑 全部清空",
                    style="Danger.TButton", command=self._clear_all).pack(side="right")
+        # === NEW: Export and Import Buttons ===
+        ttk.Button(head, text="📥 导入",
+                   style="Ghost.TButton", command=self._import_talents).pack(side="right", padx=4)
+        ttk.Button(head, text="📤 导出",
+                   style="Ghost.TButton", command=self._export_talents).pack(side="right", padx=4)
 
         self.list_frame = tk.Frame(card, bg=COLORS["card"])
         self.list_frame.pack(fill="x", padx=14, pady=(0, 12))
@@ -482,6 +493,44 @@ class TalentEditor(tk.Toplevel):
             mod_outer, text="+ 添加加成", style="Ghost.TButton",
             command=lambda: self._add_modifier_row(),
         ).pack(anchor="w", pady=4)
+
+    def _export_talents(self):
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json", 
+            filetypes=[("JSON 文件", "*.json")], 
+            title="导出自定义天赋库",
+            initialfile="我的自定义天赋库.json"
+        )
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(self.talents, f, ensure_ascii=False, indent=2)
+                messagebox.showinfo("成功", f"成功导出 {len(self.talents)} 个自定义天赋！", parent=self)
+            except Exception as e:
+                messagebox.showerror("导出失败", str(e), parent=self)
+
+    def _import_talents(self):
+        path = filedialog.askopenfilename(
+            filetypes=[("JSON 文件", "*.json")], 
+            title="导入自定义天赋库"
+        )
+        if path:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                # Support both a direct list or {"talents": [...]} format
+                new_talents = data.get("talents", data) if isinstance(data, dict) else data
+                
+                if isinstance(new_talents, list):
+                    self.talents.extend(new_talents)
+                    save_user_talents(self.talents)
+                    self._refresh_list()
+                    messagebox.showinfo("成功", f"成功导入并合并了 {len(new_talents)} 个天赋！", parent=self)
+                else:
+                    messagebox.showerror("错误", "读取的文件格式不正确。", parent=self)
+            except Exception as e:
+                messagebox.showerror("导入失败", str(e), parent=self)
 
         tip = tk.Label(
             form,
@@ -652,10 +701,20 @@ class TalentEditor(tk.Toplevel):
             tk.Label(row, text=cfg["label"], bg=cfg["bg"], fg=cfg["color"],
                      font=(FONT_FAM, 9, "bold"), padx=8, pady=2).pack(side="left")
 
-            mode_text = "(普通)" if t.get("mode") == "Normal" else "(性压抑)"
+            # ================= 修改这里：支持多模式的显示 =================
+            mode_val = t.get("mode", "Normal")
+            mode_dict = {
+                "Normal": "普通", 
+                "Horni": "性压抑", 
+                "HorniIntense": "真的很性压抑", 
+                "Store": "通马桶"
+            }
+            mode_text = f"({mode_dict.get(mode_val, mode_val)})"
+            
             scs = "/".join(t.get("scenarios", ["any"]))
 
             tk.Label(row, text=f"  {t.get('name','')}  {mode_text}  ·  {scs}",
+            # =========================================================
                      bg=COLORS["card"], fg=COLORS["text"],
                      font=F_BODY).pack(side="left")
 
@@ -799,7 +858,16 @@ class App(tk.Tk):
         except Exception:
             start_age = 0
 
-        return max(0, int(start_age) - 18)
+        points = max(0, int(start_age) - 18)
+
+        # ================= NEW: HorniIntense 专属初始成长检定奖励 =================
+        if c.get("content_mode") == "horny_intense":  # 必须和 MODE_HORNY_INTENSE 字符串一致
+            points += 15
+            
+        # ================= NEW: 测试模式的额外增加点数 =================
+        points += c.get("test_extra_tracker_points", 0)
+
+        return points
 
     def configure_fine_mode(self, enabled, start_age=0, end_age=80, timestamp="year"):
         """
@@ -1174,7 +1242,7 @@ class DisclaimerPage(tk.Frame):
 
         # ============ 1. 免责声明正文 ============
         disclaimer_text = (
-            "本程序是部分参考 https://re.maa-ai.com/ 的精神本地版，作者参考了大致的架构并加入了很多自己想要的功能。\n\n"
+            "这个小玩具是部分参考 https://re.maa-ai.com/ 的精神本地版，作者参考了大致的架构并加入了很多自己想要的功能。\n\n"
             "网页版体验更好喵。\n\n"
             "本程序的用户（以下简称你）可以通过切换不同的API来达到使用不同LLM来玩的效果。同时，本程序加入了更多的用户编辑功能。\n\n"
             "这个小程序会需要你填入你的 API 密钥，这是很重要的东西。\n\n"
@@ -1217,7 +1285,29 @@ class DisclaimerPage(tk.Frame):
 
         changelog_text = (
             f"{VERSION} 更新：\n"
-            "- 健康发行版，删除和隐藏了部分不合适的内容。\n\n"
+            "- Github发行的健康版。\n\n"
+            "v0.7.5 SAIRAI 更新：\n"
+            "- 修复了微调模式下浮动属性无法正常增长的问题。\n"
+            "- 修复了AI输入小写格式的属性修改时，系统无法识别修改得问题。\n\n"
+            "v0.7.4 BEYONDTHESTRATUS 更新：\n"
+            "- 添加了可以在api输入页面中修改模型temp，top_p和top_k的功能。\n"
+            "- 添加了细节时间控制下，“下一刻”的时间选项。\n"
+            "- 添加了导出自定义天赋库的功能。\n"
+            "- 修复了高级功能API设置中按钮挡住模型名输入栏的问题。\n"
+            "- 修复了主动行动中无法换行的问题。现在的的提交热键为ctrl+enter。\n"
+            "- 修复了细节时间控制模式中系统时间跨度和选择的时间跨度不一样的问题。\n\n"
+            "v0.7.3.1 UNTITLED2 更新：\n"
+            "- 修复了省token模式会锁定上下文至1200token或以下的问题。\n\n"
+            "v0.7.3 ELECTRON 更新：\n"
+            "- 添加了QOL高级功能：审查官模式。打开后可以设置ai平衡主ai给的数值。\n"
+            "- 修复了高级功能中备用ai的API被明文保存的问题。\n\n"
+            "v0.7.2 PULSES 更新：\n"
+            "- 添加了QOL功能：细节时间控制。打开后可以选择下一回合的时间跨度。\n"
+            "- 添加了QOL功能：事件几率控制。打开后可以自由设定事件发生的几率。\n"
+            "- 添加了QOL功能：高级省token模式。通过压缩上下文的方式省下一些token。\n"
+            "- 添加了QOL功能：稳定性模式。打开后可以设置备用ai自动修复json。\n\n"
+            "v0.7.1.1 YAWNINGLION 更新：\n"
+            "- Github发行的健康版。\n\n"
             "v0.7.1 RUNGORUN 更新：\n"  
             "- 添加了设置自动保存功能。现在许多设置会自动保存了，你下一次打开游戏不需要重新调试一遍。\n"
             "- 这个功能其实0.7.0就做好了。但是我觉得它太伟大了，不亚于山顶洞人第一次发现石头可以丢。\n"
@@ -1244,14 +1334,15 @@ class DisclaimerPage(tk.Frame):
             "- 修复了第一次打开特质编辑器无法看到已有特质的bug。\n"
             "- 通马桶模式暂时还没有做d100适配的浮动属性。\n\n"
             "v0.6.3 YUBIKIRI 更新：\n"   
-            "- 修复了BANYAN版本中主动行动（又）无法实际确认行动的问题。\n"
+            "- 修复了SAIKA版本中主动行动（又）无法实际确认行动的问题。\n"
             "- 修复了通马桶模式中出现AttributeError的问题。\n\n"
             "v0.6.2 SAIKA 更新：\n"           
             "- 添加了可以让用户在正常模式中是否启用骰子功能的选择项。\n"
             "- 添加了针对低级自动爬虫抓取本地加密密匙的防护。少量提高安全性。\n"
-            "- 修复了POPLAR版本中骰子功能超出代码定义范围的bug。\n\n"
+            "- 修复了IHATETOTELLYOU版本中骰子功能超出代码定义范围的bug。\n\n"
             "v0.6.1 IHATETOTELLYOU 更新：\n"
-            "- 对所有模式里的选择检定都做了CARNATION更新中的成功/失败检定功能适配。\n"
+            "- 对所有模式里的选择检定都做了成功/失败检定功能适配。\n"
+            "- 现在决定你行动成功不成功的是程序骰子而不是llm，所以你的行动可以真正意义上的失败了。\n"
             "- 小幅上调所有模式中的自由属性点至180点。\n"
             "- 优化了通马桶模式的技术细节。\n"
             "- 对四个情景都进行了通马桶模式的天赋池适配。\n\n"
@@ -1277,6 +1368,7 @@ class DisclaimerPage(tk.Frame):
             "- QOL改善和底层代码优化。\n\n"
             "v0.4.1 LIGHTPOLLUTION 更新：\n"
             "- 修改了天赋系统-从单纯的抽三变为了抽六选三。\n"
+            "- 添加了天赋卡上和稀有度对应的颜色。\n"
             "- 在一局人生结束之后和游戏进行时都增加了导出记录为.txt的功能。\n"
             "- 小幅上调了两种模式下的属性点数量。\n"
             "- 微调了AI给予选项的频率。\n\n"
@@ -1382,7 +1474,7 @@ class APIPage(tk.Frame):
         if "slots" not in cfg:
             cfg["slots"] = [{
                 "base_url": cfg.get("base_url", "https://api.deepseek.com/v1"),
-                "model": cfg.get("model", "deepseek-chat"),
+                "model": cfg.get("model", "deepseek-v4-flash"),
             }]
             cfg["active_slot"] = 0
             
@@ -1401,7 +1493,7 @@ class APIPage(tk.Frame):
             slots.append({
                 "base_url": "https://api.deepseek.com/v1",
                 "api_key": "",
-                "model": "deepseek-chat",
+                "model": "deepseek-v4-flash",
             })
             
         self.slot_widgets = []
@@ -1454,6 +1546,25 @@ class APIPage(tk.Frame):
         e_key = _row("API Key", 1, default=slot_data.get("api_key", ""), show="*")
         e_model = _row("模型名", 2, default=slot_data.get("model", ""))
         show_var = tk.BooleanVar(value=False)
+
+        # === NEW: Model Parameters UI ===
+        param_f = tk.Frame(f, bg=COLORS["card"])
+        param_f.grid(row=4, column=1, sticky="w", pady=6)
+        
+        tk.Label(param_f, text="Temp:", bg=COLORS["card"], fg=COLORS["text"], font=F_SMALL).pack(side="left")
+        e_temp = ttk.Entry(param_f, width=5)
+        e_temp.insert(0, str(slot_data.get("temperature", 0.8)))
+        e_temp.pack(side="left", padx=(0, 10))
+        
+        tk.Label(param_f, text="Top P:", bg=COLORS["card"], fg=COLORS["text"], font=F_SMALL).pack(side="left")
+        e_top_p = ttk.Entry(param_f, width=5)
+        e_top_p.insert(0, str(slot_data.get("top_p", 1.0)))
+        e_top_p.pack(side="left", padx=(0, 10))
+        
+        tk.Label(param_f, text="Top K:", bg=COLORS["card"], fg=COLORS["text"], font=F_SMALL).pack(side="left")
+        e_top_k = ttk.Entry(param_f, width=5)
+        e_top_k.insert(0, str(slot_data.get("top_k", 50)))
+        e_top_k.pack(side="left")
         
         def toggle_show():
             # 这里就算点开了显示的也只会是类似 sk-12345••••••789 这种脱敏的 Key
@@ -1468,7 +1579,8 @@ class APIPage(tk.Frame):
             card, text="测试并启用此 API", style="Primary.TButton",
             command=lambda i=idx: self.test_slot(i),
         ).pack(anchor="e", padx=18, pady=(4, 12))
-        return {"url": e_url, "key": e_key, "model": e_model, "active_label": active_lbl}
+        # Change this line at the bottom of the function:
+        return {"url": e_url, "key": e_key, "model": e_model, "temp": e_temp, "top_p": e_top_p, "top_k": e_top_k, "active_label": active_lbl}
                 
     def test_slot(self, idx):
         sw = self.slot_widgets[idx]
@@ -1499,7 +1611,15 @@ class APIPage(tk.Frame):
                 reply = r.choices[0].message.content.strip()
                 def ok():
                     self.real_keys[idx] = actual_key # 测试成功，更新内存里的真 Key
-                    self.app.app_state.update(client=client, model=model, connected=True)
+                    
+                    # === NEW: Save parameters to app state ===
+                    api_params = {
+                        "temperature": float(sw["temp"].get().strip() or 0.8),
+                        "top_p": float(sw["top_p"].get().strip() or 1.0),
+                        "top_k": int(sw["top_k"].get().strip() or 50)
+                    }
+                    self.app.app_state.update(client=client, model=model, connected=True, api_params=api_params)
+                    
                     self.status.config(text=f"✅ 槽 #{idx + 1} 连接成功！AI 回复：{reply}", fg=COLORS["success"])
                     self.btn_next.config(state="normal")
                     self._update_active_indicator(idx)
@@ -1532,6 +1652,9 @@ class APIPage(tk.Frame):
             slots.append({
                 "base_url": sw["url"].get().strip(),
                 "model": sw["model"].get().strip(),
+                "temperature": float(sw["temp"].get().strip() or 0.8),
+                "top_p": float(sw["top_p"].get().strip() or 1.0),
+                "top_k": int(sw["top_k"].get().strip() or 50),
             })
             
             if self.remember_var.get():
@@ -1573,6 +1696,234 @@ class APIPage(tk.Frame):
     def on_show(self):
         if self.app.app_state.get("connected"):
             self.btn_next.config(state="normal")
+
+# ============================================================
+# Helper API config
+# ============================================================
+
+class HelperAPIDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("⚙️ 配置 Helper API (稳定性模式)")
+        self.geometry("500x380")
+        self.configure(bg=COLORS["bg"])
+        self.transient(parent)
+        self.grab_set()
+
+        tk.Label(self, text="⚙️ Helper API 配置", bg=COLORS["bg"], fg=COLORS["text"], font=F_HEAD).pack(anchor="w", padx=16, pady=(14, 4))
+        
+        info = "当主 AI 返回的 JSON 格式损坏时，将调用此 API 强行修复。\n建议使用便宜但聪明的<27B小模型。小模型在跟随指令上更好。\n如果 API Key 留空，将默认使用主 API 的 Key。"
+        lbl = tk.Label(self, text=info, bg=COLORS["bg"], fg=COLORS["subtext"], font=F_SMALL, justify="left")
+        lbl.pack(anchor="w", fill="x", padx=16, pady=(0, 12))
+
+        cfg = load_config().get("helper_api", {})
+
+        f = tk.Frame(self, bg=COLORS["bg"])
+        f.pack(fill="both", expand=True, padx=16)
+
+        def _row(label, r, default=""):
+            tk.Label(f, text=label, bg=COLORS["bg"], fg=COLORS["text"], font=F_BODY).grid(row=r, column=0, sticky="e", pady=8, padx=4)
+            e = ttk.Entry(f, width=40)
+            e.insert(0, default)
+            e.grid(row=r, column=1, pady=8, sticky="w")
+            return e
+
+        # ================= NEW: 读取加密的真实 Key 并脱敏显示 =================
+        import keyring
+        self.real_key = keyring.get_password("AILifeRemake", "helper_api_key") or ""
+        masked_key = mask_api_key(self.real_key) if self.real_key else ""
+        # ====================================================================
+
+        self.e_url = _row("Base URL", 0, cfg.get("base_url", "https://api.deepseek.com/v1"))
+        self.e_key = _row("API Key", 1, masked_key) # <--- UI 栏只显示这串掩码
+        self.e_key.config(show="*")
+        self.e_model = _row("模型名", 2, cfg.get("model", "deepseek-v4-flash"))
+        self.e_retries = _row("最大重试次数", 3, cfg.get("max_retries", "1"))
+
+        # 添加一个显示/隐藏按钮
+        self.show_var = tk.BooleanVar(value=False)
+        def toggle_show():
+            self.e_key.config(show="" if self.show_var.get() else "*")
+        # Changed to row=1, column=2 to place it next to the API Key entry
+        ttk.Checkbutton(f, text="显示 Key", variable=self.show_var, style="Card.TCheckbutton", command=toggle_show).grid(row=1, column=2, padx=(8, 0), sticky="w")
+
+        bottom = tk.Frame(self, bg=COLORS["bg"])
+        bottom.pack(side="bottom", fill="x", padx=16, pady=16)
+
+        def save():
+            import keyring
+            full_cfg = load_config()
+            display_key = self.e_key.get().strip()
+            
+            # 判断用户是否修改了密码框的内容
+            actual_key = self.real_key if display_key == mask_api_key(self.real_key) else display_key
+            
+            # 存入系统的凭据管理器
+            if actual_key:
+                keyring.set_password("AILifeRemake", "helper_api_key", actual_key)
+            else:
+                try:
+                    keyring.delete_password("AILifeRemake", "helper_api_key")
+                except Exception:
+                    pass
+
+            # JSON 配置文件中绝对不存 API Key
+            full_cfg["helper_api"] = {
+                "base_url": self.e_url.get().strip(),
+                "model": self.e_model.get().strip(),
+            }
+            save_config(full_cfg)
+            messagebox.showinfo("已保存", "Helper API 配置已安全加密保存！", parent=self)
+            self.destroy()
+
+        ttk.Button(bottom, text="💾 保存", style="Primary.TButton", command=save).pack(side="right")
+        ttk.Button(bottom, text="取消", style="Secondary.TButton", command=self.destroy).pack(side="right", padx=8)
+
+class TurboAPIDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("⚙️ 配置 Helper API (高级省Token模式)")
+        self.geometry("500x380")
+        self.configure(bg=COLORS["bg"])
+        self.transient(parent)
+        self.grab_set()
+
+        tk.Label(self, text="高级省Token模式配置", bg=COLORS["bg"], fg=COLORS["text"], font=F_HEAD).pack(anchor="w", padx=16, pady=(14, 4))
+        
+        info = "开启此模式后，每隔N个回合将自动唤醒此API将过往剧情浓缩成几百字的记忆摘要并保存。\n" \
+               "注意，这会稍微降低游戏结束时生成的「一生总结」细节质量，并让 AI 丢失部分琐碎的往事对话细节。"
+        lbl = tk.Label(self, text=info, bg=COLORS["bg"], fg=COLORS["warning"], font=F_SMALL, justify="left")
+        lbl.pack(anchor="w", fill="x", padx=16, pady=(0, 12))
+        auto_wrap(lbl)
+
+        cfg = load_config().get("turbo_api", {})
+
+        f = tk.Frame(self, bg=COLORS["bg"])
+        f.pack(fill="both", expand=True, padx=16)
+
+        def _row(label, r, default=""):
+            tk.Label(f, text=label, bg=COLORS["bg"], fg=COLORS["text"], font=F_BODY).grid(row=r, column=0, sticky="e", pady=8, padx=4)
+            e = ttk.Entry(f, width=40)
+            e.insert(0, default)
+            e.grid(row=r, column=1, pady=8, sticky="w")
+            return e
+
+        import keyring
+        self.real_key = keyring.get_password("AILifeRemake", "turbo_api_key") or ""
+        masked_key = mask_api_key(self.real_key) if self.real_key else ""
+
+        self.e_url = _row("Base URL", 0, cfg.get("base_url", "https://api.deepseek.com/v1"))
+        self.e_key = _row("API Key", 1, masked_key)
+        self.e_key.config(show="*")
+        self.e_model = _row("模型名", 2, cfg.get("model", "deepseek-v4-flash"))
+        
+        # ====== 涡轮专属设置 ======
+        self.e_interval = _row("压缩间隔(回合)", 3, cfg.get("interval", "15"))
+        self.e_retain = _row("保留不压缩(回合)", 4, cfg.get("retain", "4"))
+        # ==========================
+
+        self.show_var = tk.BooleanVar(value=False)
+        def toggle_show():
+            self.e_key.config(show="" if self.show_var.get() else "*")
+        ttk.Checkbutton(f, text="显示 Key", variable=self.show_var, style="Card.TCheckbutton", command=toggle_show).grid(row=1, column=2, padx=(8, 0), sticky="w")
+
+        bottom = tk.Frame(self, bg=COLORS["bg"])
+        bottom.pack(side="bottom", fill="x", padx=16, pady=16)
+
+        def save():
+            import keyring
+            full_cfg = load_config()
+            display_key = self.e_key.get().strip()
+            actual_key = self.real_key if display_key == mask_api_key(self.real_key) else display_key
+            
+            if actual_key:
+                keyring.set_password("AILifeRemake", "turbo_api_key", actual_key)
+            else:
+                try: keyring.delete_password("AILifeRemake", "turbo_api_key")
+                except Exception: pass
+            
+            full_cfg["turbo_api"] = {
+                "base_url": self.e_url.get().strip(),
+                "model": self.e_model.get().strip(),
+                "interval": self.e_interval.get().strip(),
+                "retain": self.e_retain.get().strip()
+            }
+            save_config(full_cfg)
+            messagebox.showinfo("已保存", "高级省Token配置已安全保存！", parent=self)
+            self.destroy()
+
+        ttk.Button(bottom, text="💾 保存", style="Primary.TButton", command=save).pack(side="right")
+        ttk.Button(bottom, text="取消", style="Secondary.TButton", command=self.destroy).pack(side="right", padx=8)
+
+class AuditAPIDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("⚖️ 配置审查官 API (高级数值平衡)")
+        self.geometry("560x400")
+        self.configure(bg=COLORS["bg"])
+        self.transient(parent)
+        self.grab_set()
+
+        tk.Label(self, text="⚖️ 审查官 API 配置", bg=COLORS["bg"], fg=COLORS["text"], font=F_HEAD).pack(anchor="w", padx=16, pady=(14, 4))
+        
+        info = "开启此模式后，每一回合主 AI 输出后，都会发给审查官 AI 进行数值压制和格式核验。\n" \
+               "它可以识别并削减主 AI 瞎给的离谱奖励（如一口气给 +40 资产），严格剔除对核心属性的非法修改。\n" \
+               "⚠️ 这将使得每一回合增加几秒钟的等待时间及额外的 API 开销。"
+        lbl = tk.Label(self, text=info, bg=COLORS["bg"], fg=COLORS["warning"], font=F_SMALL, justify="left")
+        lbl.pack(anchor="w", fill="x", padx=16, pady=(0, 12))
+        auto_wrap(lbl)
+
+        cfg = load_config().get("audit_api", {})
+
+        f = tk.Frame(self, bg=COLORS["bg"])
+        f.pack(fill="both", expand=True, padx=16)
+
+        def _row(label, r, default=""):
+            tk.Label(f, text=label, bg=COLORS["bg"], fg=COLORS["text"], font=F_BODY).grid(row=r, column=0, sticky="e", pady=8, padx=4)
+            e = ttk.Entry(f, width=40)
+            e.insert(0, default)
+            e.grid(row=r, column=1, pady=8, sticky="w")
+            return e
+
+        import keyring
+        self.real_key = keyring.get_password("AILifeRemake", "audit_api_key") or ""
+        masked_key = mask_api_key(self.real_key) if self.real_key else ""
+
+        self.e_url = _row("Base URL", 0, cfg.get("base_url", "https://api.deepseek.com/v1"))
+        self.e_key = _row("API Key", 1, masked_key)
+        self.e_key.config(show="*")
+        self.e_model = _row("模型名", 2, cfg.get("model", "deepseek-chat"))
+
+        self.show_var = tk.BooleanVar(value=False)
+        def toggle_show():
+            self.e_key.config(show="" if self.show_var.get() else "*")
+        ttk.Checkbutton(f, text="显示 Key", variable=self.show_var, style="Card.TCheckbutton", command=toggle_show).grid(row=1, column=2, padx=(8, 0), sticky="w")
+
+        bottom = tk.Frame(self, bg=COLORS["bg"])
+        bottom.pack(side="bottom", fill="x", padx=16, pady=16)
+
+        def save():
+            import keyring
+            full_cfg = load_config()
+            display_key = self.e_key.get().strip()
+            actual_key = self.real_key if display_key == mask_api_key(self.real_key) else display_key
+            
+            if actual_key:
+                keyring.set_password("AILifeRemake", "audit_api_key", actual_key)
+            else:
+                try: keyring.delete_password("AILifeRemake", "audit_api_key")
+                except Exception: pass
+            
+            full_cfg["audit_api"] = {
+                "base_url": self.e_url.get().strip(),
+                "model": self.e_model.get().strip()
+            }
+            save_config(full_cfg)
+            messagebox.showinfo("已保存", "审查官 API 配置已安全保存！", parent=self)
+            self.destroy()
+
+        ttk.Button(bottom, text="💾 保存", style="Primary.TButton", command=save).pack(side="right")
+        ttk.Button(bottom, text="取消", style="Secondary.TButton", command=self.destroy).pack(side="right", padx=8)
 
 
 # ============================================================
@@ -1719,8 +2070,7 @@ class ScenePage(tk.Frame):
 
         adv_lbl = tk.Label(
             card,
-            text=("自定义天赋会和默认天赋池一起出现在抽取中；"
-                "默认追加提示词会附加到所有未来角色的 system prompt 末尾。"),
+            text=("高级功能设置，请谨慎调整。"),
             bg=COLORS["card"], fg=COLORS["subtext"], font=F_SMALL, justify="left",
         )
         adv_lbl.pack(anchor="w", fill="x", padx=18, pady=(0, 8))
@@ -1729,9 +2079,57 @@ class ScenePage(tk.Frame):
         
         # ========== NEW: 体验设置 Toggle ==========
         cfg_prefs = load_config().get("preferences", {}) # <--- 读取偏好设置
+
+        self.adv_audit_var = tk.BooleanVar(value=cfg_prefs.get("adv_audit_mode", False))
         
+        audit_frame = tk.Frame(card, bg=COLORS["card"])
+        audit_frame.pack(anchor="w", padx=18, pady=(4, 0), fill="x")
+        
+        ttk.Checkbutton(
+            audit_frame, text="审查模式：每次主 AI 输出后，强制唤醒第二 AI 检查并平衡属性奖励",
+            variable=self.adv_audit_var, style="Card.TCheckbutton"
+        ).pack(side="left")
+        
+        ttk.Button(
+            audit_frame, text="⚙️ 配置审查官 API", style="Ghost.TButton",
+            command=lambda: AuditAPIDialog(self)
+        ).pack(side="left", padx=10)
+
+        self.adv_stability_var = tk.BooleanVar(value=cfg_prefs.get("adv_stability", False))
+        
+        stab_frame = tk.Frame(card, bg=COLORS["card"])
+        stab_frame.pack(anchor="w", padx=18, pady=(4, 0), fill="x")
+        
+        ttk.Checkbutton(
+            stab_frame, text="稳定性模式：当 JSON 损坏时，调用第二个 AI 自动修复",
+            variable=self.adv_stability_var, style="Card.TCheckbutton"
+        ).pack(side="left")
+        
+        ttk.Button(
+            stab_frame, text="⚙️ 配置维修 API", style="Ghost.TButton",
+            command=lambda: HelperAPIDialog(self)
+        ).pack(side="left", padx=10)
+        
+        # 新增：涡轮模式 Toggle
+        self.adv_turbo_var = tk.BooleanVar(value=cfg_prefs.get("adv_turbo_mode", False))
+        
+        turbo_frame = tk.Frame(card, bg=COLORS["card"])
+        turbo_frame.pack(anchor="w", padx=18, pady=(4, 0), fill="x")
+        
+        ttk.Checkbutton(
+            turbo_frame, text="高级省token模式：高级上下文滚动压缩（将覆盖默认省token模式）",
+            variable=self.adv_turbo_var, style="Card.TCheckbutton"
+        ).pack(side="left")
+        
+        ttk.Button(
+            turbo_frame, text="⚙️ 配置压缩 API", style="Ghost.TButton",
+            command=lambda: TurboAPIDialog(self)
+        ).pack(side="left", padx=10)
+
+
         self.adv_save_token_var = tk.BooleanVar(value=cfg_prefs.get("adv_save_token", True))
-        ttk.Checkbutton(card, text="省token模式：每一回合开启新对话并提取履历，大量节省词元(推荐)",
+        ttk.Checkbutton(card, text="省token模式：每一回合开启新的API对话并删除重复的system prompt等信息。\n"
+                        "不建议关闭，除非你故意想要用垃圾数据淹没该模型的判断。",
                         variable=self.adv_save_token_var, style="Card.TCheckbutton").pack(anchor="w", padx=18, pady=(4, 0))
                         
         self.adv_edit_prompt_var = tk.BooleanVar(value=cfg_prefs.get("adv_edit_prompt", False))
@@ -1740,11 +2138,19 @@ class ScenePage(tk.Frame):
                         
         self.adv_show_payload_var = tk.BooleanVar(value=cfg_prefs.get("adv_show_payload", False))
         ttk.Checkbutton(card, text="显示每轮对话发送给API的内容",
-                        variable=self.adv_show_payload_var, style="Card.TCheckbutton").pack(anchor="w", padx=18, pady=(4, 12))
+                        variable=self.adv_show_payload_var, style="Card.TCheckbutton").pack(anchor="w", padx=18, pady=(4, 0))
+        # 新增：高级时间跨度设置
+        self.adv_flex_time_var = tk.BooleanVar(value=cfg_prefs.get("adv_flex_time", False))
+        ttk.Checkbutton(card, text="灵活时间控制：在游戏界面允许随时切换“下一年/月/周”",
+                        variable=self.adv_flex_time_var, style="Card.TCheckbutton").pack(anchor="w", padx=18, pady=(4, 0))
 
+        # 新增：自定义事件发生几率
+        self.adv_custom_prob_var = tk.BooleanVar(value=cfg_prefs.get("adv_custom_prob", False))
+        ttk.Checkbutton(card, text="自定义事件几率：在游戏界面允许手动设定0-100的事件发生率",
+                        variable=self.adv_custom_prob_var, style="Card.TCheckbutton").pack(anchor="w", padx=18, pady=(4, 12))
+        
         adv_row = tk.Frame(card, bg=COLORS["card"])
         adv_row.pack(anchor="w", padx=18, pady=(0, 14))
-
         ttk.Button(
             adv_row, text="✨ 自定义天赋编辑器", style="Secondary.TButton",
             command=lambda: TalentEditor(self.app, self.app),
@@ -1772,13 +2178,22 @@ class ScenePage(tk.Frame):
         c["adv_save_token"] = self.adv_save_token_var.get()
         c["adv_edit_prompt"] = self.adv_edit_prompt_var.get()
         c["adv_show_payload"] = self.adv_show_payload_var.get()
+        c["adv_stability"] = self.adv_stability_var.get() # <--- 记录到角色状态中
+        c["adv_turbo_mode"] = self.adv_turbo_var.get()
+        c["adv_flex_time"] = self.adv_flex_time_var.get()
+        c["adv_custom_prob"] = self.adv_custom_prob_var.get()
+        c["adv_audit_mode"] = self.adv_audit_var.get()
         
-        # ================= NEW: 保存高级功能到本地配置文件 =================
         cfg = load_config()
         prefs = cfg.setdefault("preferences", {})
         prefs["adv_save_token"] = self.adv_save_token_var.get()
         prefs["adv_edit_prompt"] = self.adv_edit_prompt_var.get()
         prefs["adv_show_payload"] = self.adv_show_payload_var.get()
+        prefs["adv_stability"] = self.adv_stability_var.get() # <--- 保存到本地
+        prefs["adv_turbo_mode"] = self.adv_turbo_var.get() # 保存到本地 config
+        prefs["adv_flex_time"] = self.adv_flex_time_var.get()
+        prefs["adv_custom_prob"] = self.adv_custom_prob_var.get()
+        prefs["adv_audit_mode"] = self.adv_audit_var.get()
         save_config(cfg)
         # ===============================================================
 
@@ -1920,7 +2335,6 @@ class IdentityPage(tk.Frame):
 
         content_options = [
             (CONTENT_NORMAL, "普通人生", "世间百态", "normal"),
-            #(CONTENT_HORNY, "我有性压抑", "特殊属性和一些独特特质。", "normal"),
             (CONTENT_STORE, "我要通马桶", "扮演神秘NPC接受委托和解决委托。", "normal"),
         ]
 
@@ -2103,6 +2517,21 @@ class IdentityPage(tk.Frame):
                 ):
                     return
                 self.fast_var.set(False)        
+        
+        if self.content_var.get() == MODE_HORNY_INTENSE:
+            if not self.fine_var.get():
+                messagebox.showwarning("警告", "「我真的有性压抑」模式必须开启下方的【微调模式 (Fine Mode)】！")
+                return
+            
+            try:
+                start_age = float(self.fine_start_var.get().strip())
+                if start_age < 18:
+                    messagebox.showwarning("警告", "该模式的【开局年龄】必须大于或等于 18 岁！")
+                    return
+            except ValueError:
+                # Let the existing exception handler catch the non-number error below
+                pass
+        # ==========================================================
 
         c = self.app.character
         c.update(
@@ -2716,7 +3145,18 @@ class AttributePage(tk.Frame):
 
     def _points_pool(self):
         m = self.app.mode_data()
-        return getattr(m, "POINTS_POOL_DEFAULT", 180)
+        base_pool = getattr(m, "POINTS_POOL_DEFAULT", 200)
+        c = self.app.character
+        
+        # ================= NEW: HorniIntense 根据岁数奖励核心属性点 =================
+        if c.get("content_mode") == "horny_intense" and c.get("fine_enabled"):
+            try:
+                start_age = float(c.get("fine_settings", {}).get("start_age", 18))
+                base_pool += int(start_age * 3)
+            except Exception:
+                pass
+                
+        return base_pool
 
     def toggle_roll_mode(self):
         c = self.app.character
@@ -2985,6 +3425,18 @@ class FineTrackerPage(tk.Frame):
         inner = tk.Frame(body, bg=COLORS["bg"])
         inner.pack(fill="both", expand=True, padx=40, pady=20)
 
+        # ================= NEW: 顶部测试功能区 =================
+        self.top_ctrl = tk.Frame(inner, bg=COLORS["bg"])
+        self.top_ctrl.pack(fill="x", pady=(0, 10))
+        
+        self.btn_test_points = ttk.Button(
+            self.top_ctrl,
+            text="🧪[测试] +10次自由成长检定",
+            style="Ghost.TButton",
+            command=self.add_test_points
+        )
+        # =======================================================
+
         outer, card = Card(inner)
         outer.pack(fill="x", pady=8)
 
@@ -3045,10 +3497,22 @@ class FineTrackerPage(tk.Frame):
 
     def remaining_points(self):
         return self.total_points() - self.spent_points()
+    
+    def add_test_points(self):
+        c = self.app.character
+        c["test_extra_tracker_points"] = c.get("test_extra_tracker_points", 0) + 10
+        self.refresh_remaining()
 
     def on_show(self):
         c = self.app.character
         m = self.app.mode_data()
+        # ================= NEW: 控制测试按钮显示 =================
+        is_test = c.get("difficulty") == MODE_TEST  # DIFF_TEST
+        if is_test:
+            self.btn_test_points.pack(side="left", padx=10)
+        else:
+            self.btn_test_points.pack_forget()
+        # =======================================================
         trackers = getattr(m, "TRACKERS", {})
 
         if not trackers:
@@ -3823,6 +4287,14 @@ class GamePage(tk.Frame):
                 command=lambda p=prob: self.set_life_style(p),
             ).pack(side="left", padx=6)
 
+        c = self.app.character
+        if c.get("adv_custom_prob"):
+            ttk.Separator(self.control_frame, orient="horizontal").pack(fill="x", pady=10)
+            ttk.Button(
+                self.control_frame, text="⚙️ 自定义事件几率", 
+                style="Secondary.TButton", command=self.adjust_event_prob
+            ).pack()
+
     def set_life_style(self, prob):
         c = self.app.character
         c["event_chance"] = prob
@@ -3845,28 +4317,126 @@ class GamePage(tk.Frame):
         row = tk.Frame(self.control_frame, bg=COLORS["card"])
         row.pack(pady=10)
 
-        ttk.Button(
-            row, text="下一时间点 →",
-            style="Primary.TButton", command=self.next_tick,
-        ).pack(side="left", padx=6)
+        c = self.app.character
+
+        # ================= NEW: 灵活时间跨度控制 =================
+        # ================= NEW: 灵活时间跨度控制 =================
+        if c.get("adv_flex_time"):
+            time_frame = tk.Frame(row, bg=COLORS["card"])
+            time_frame.pack(side="left", padx=(0, 6))
+            
+            tk.Label(time_frame, text="推进：", bg=COLORS["card"], fg=COLORS["text"], font=F_BODY).pack(side="left")
+            
+            ttk.Button(time_frame, text="一年", style="Primary.TButton", 
+                       command=lambda: self.next_tick_flex(step_val=1, label="年")).pack(side="left", padx=2)
+            ttk.Button(time_frame, text="一月", style="Primary.TButton", 
+                       command=lambda: self.next_tick_flex(step_val=1/12, label="月")).pack(side="left", padx=2)
+            ttk.Button(time_frame, text="一周", style="Primary.TButton", 
+                       command=lambda: self.next_tick_flex(step_val=1/52, label="周")).pack(side="left", padx=2)
+            
+            # ADD: 下一刻按钮
+            ttk.Button(time_frame, text="一刻", style="Primary.TButton", 
+                       command=lambda: self.next_tick_flex(step_val=0, label="刻")).pack(side="left", padx=2)
+            
+            # 只有在 Store Mode (以“天”为单位) 才会显示“一天”按钮
+            if c.get("content_mode") == "store":
+                ttk.Button(time_frame, text="一天", style="Primary.TButton", 
+                           command=lambda: self.next_tick_flex(step_val=1, label="天")).pack(side="left", padx=2)
+        else:
+            # 原版按钮
+            ttk.Button(
+                row, text="下一时间点 →",
+                style="Primary.TButton", command=self.next_tick,
+            ).pack(side="left", padx=6)
+        # =========================================================
 
         ttk.Button(
             row, text="🎯 主动行动",
             style="Secondary.TButton", command=self.do_active_action,
         ).pack(side="left", padx=6)
 
-        c = self.app.character
+        # ================= NEW: 自定义事件发生几率 =================
+        if c.get("adv_custom_prob"):
+            current_prob = int(c.get("event_chance", 0.5) * 100)
+            ttk.Button(
+                row, text=f"🎲 事件率: {current_prob}%",
+                style="Secondary.TButton", command=self.adjust_event_prob,
+            ).pack(side="left", padx=6)
+        # =========================================================
+
         if c.get("adv_edit_prompt"):
             ttk.Button(
-                row, text="🛠 编辑系统提示词",
+                row, text="🛠 编辑提示词",
                 style="Secondary.TButton", command=self.edit_system_prompt,
             ).pack(side="left", padx=6)
             
         if c.get("adv_show_payload"):
             ttk.Button(
-                row, text="📄 本轮对话发送内容",
+                row, text="📄 发送内容",
                 style="Ghost.TButton", command=self.show_api_payload,
             ).pack(side="left", padx=6)
+
+    def next_tick_flex(self, step_val, label):
+        """处理灵活时间的跨度覆写，然后继续正常的 next_tick()"""
+        c = self.app.character
+        
+        # 记录刚刚度过的时间，用于稍后打印灰色文本
+        c["_last_time_passed_label"] = label
+        
+        # 强制覆写 time_config_override
+        c.setdefault("time_config_override", {})
+        
+        if c.get("content_mode") == "store":
+            if label == "年": step_val = 365
+            elif label == "月": step_val = 30
+            elif label == "周": step_val = 7
+            elif label == "天": step_val = 1
+            elif label == "刻": step_val = 0
+            
+            c["time_config_override"]["age_step"] = step_val
+            c["time_config_override"]["tick_step"] = 1 
+            
+        else:
+            c["time_config_override"]["age_step"] = step_val
+            c["time_config_override"]["tick_step"] = 1
+            # 开启高级时间控制后，强制将 tick 的计量单位改成“回合”
+            c["time_config_override"]["tick_label"] = "回合" 
+
+        self.next_tick()
+
+        
+    def adjust_event_prob(self):
+        """弹出一个小窗口允许玩家输入 0-100 的事件几率"""
+        c = self.app.character
+        
+        win = tk.Toplevel(self.app)
+        win.title("调整事件发生几率")
+        win.geometry("300x180")
+        win.configure(bg=COLORS["bg"])
+        win.transient(self.app)
+        win.grab_set()
+        
+        tk.Label(win, text="设定事件触发概率 (0-100)", bg=COLORS["bg"], fg=COLORS["text"], font=F_SUB).pack(pady=(20, 10))
+        
+        prob_var = tk.StringVar(value=str(int(c.get("event_chance", 0.5) * 100)))
+        entry = ttk.Entry(win, textvariable=prob_var, width=10, justify="center", font=F_BODY)
+        entry.pack(pady=10)
+        entry.focus_set()
+        
+        def save():
+            try:
+                val = int(prob_var.get().strip())
+                if val < 0 or val > 100:
+                    raise ValueError
+                c["event_chance"] = val / 100.0
+                win.destroy()
+                # 刷新底部的按钮文字
+                self.show_next_button()
+            except ValueError:
+                messagebox.showwarning("错误", "请输入 0 到 100 之间的整数。", parent=win)
+
+        ttk.Button(win, text="保存", style="Primary.TButton", command=save).pack(pady=10)
+        win.bind("<Return>", lambda e: save())
 
     def next_tick(self):
         c = self.app.character
@@ -3886,7 +4456,17 @@ class GamePage(tk.Frame):
                 lambda d: self.on_event_response(d, start_logs),
             )
         else:
-            self.append_history("\n" + m.format_history_header(c), "year")
+            self.append_history("\n" + self.get_formatted_header(), "year")
+            
+            # ===== 插入灰色的时间流逝提示 =====
+            passed_label = c.pop("_last_time_passed_label", None)
+            if passed_label and c.get("adv_flex_time"):
+                if passed_label == "刻":
+                    self.append_history("　刚刚过去了片刻......", "adj")
+                else:
+                    self.append_history(f"　一{passed_label}过去了......", "adj")
+            # =================================
+            
             if start_logs:
                 self.append_history(f"　〔{' / '.join(start_logs)}〕", "adj")
             self.append_history("　无事发生。")
@@ -4016,7 +4596,16 @@ class GamePage(tk.Frame):
         narrative = data.get("narrative", "（AI未提供描述）")
 
         if add_header:
-            self.append_history("\n" + m.format_history_header(c), "year")
+            # 替换为新的格式化 Header
+            self.append_history("\n" + self.get_formatted_header(), "year")
+            
+            # ===== 插入灰色的时间流逝提示 =====
+            passed_label = c.pop("_last_time_passed_label", None)
+            if passed_label and c.get("adv_flex_time"):
+                if passed_label == "刻":
+                    self.append_history("　刚刚过去了片刻......", "adj")
+                else:
+                    self.append_history(f"　一{passed_label}过去了......", "adj")
 
         self.append_history(f"　{narrative}")
 
@@ -4096,6 +4685,49 @@ class GamePage(tk.Frame):
             self.append_history(f"\n💀 享年 {age} 岁　死因：{cause}", "death")
 
         self.refresh_panel()
+
+    def get_formatted_header(self):
+        c = self.app.character
+        m = self.app.mode_data()
+
+        # 如果没有开启高级时间，走原版逻辑
+        if not c.get("adv_flex_time"):
+            return m.format_history_header(c)
+
+        # 开启了灵活时间控制，使用全新格式
+        tick = m.get_time_tick(c)
+        current_age = m.get_character_age(c)
+
+        # 获取最初设定的起始年龄
+        start_age = m.get_time_config(c).get("start_age", 0)
+        if c.get("fine_enabled"):
+            try: start_age = float(c.get("fine_settings", {}).get("start_age", start_age))
+            except: pass
+                
+        # 计算过去的年、月、周
+        elapsed = max(0, current_age - start_age)
+        
+        # 将流逝的年数转换为总周数来计算（1年≈52周，1月≈4周）
+        total_weeks = int(round(elapsed * 52))
+        y = total_weeks // 52
+        rem_weeks = total_weeks % 52
+        mo = rem_weeks // 4
+        w = rem_weeks % 4
+
+        time_str_parts = []
+        if y > 0: time_str_parts.append(f"{y}年")
+        if mo > 0: time_str_parts.append(f"{mo}个月")
+        if w > 0: time_str_parts.append(f"{w}周")
+
+        if not time_str_parts:
+            time_passed_str = "刚刚开始"
+        else:
+            time_passed_str = "".join(time_str_parts)
+
+        # 格式化年龄，去掉多余的0
+        age_display = f"{float(current_age):.2f}".rstrip("0").rstrip(".")
+
+        return f"第{int(tick)}回合，{age_display}岁，据故事开始过了（{time_passed_str}）"
 
     def filter_valid_checks(self, checks):
             """核心拦截器：打回所有不属于当前模式的非法属性检定"""
@@ -4381,14 +5013,14 @@ class GamePage(tk.Frame):
                     self.set_loading("正在分析你的行动……")
                     self.send_action_check_normal(action)
 
-            ttk.Button(bottom, text="执行（Enter）", style="Primary.TButton",
+            ttk.Button(bottom, text="执行（Shift+Enter）", style="Primary.TButton",
                     command=submit).pack(side="right")
             ttk.Button(bottom, text="取消（Esc）", style="Secondary.TButton",
                     command=win.destroy).pack(side="right", padx=8)
 
             # 快捷键
-            win.bind("<Return>", lambda e: (submit(), "break"))
-            win.bind("<Control-Return>", lambda e: (submit(), "break"))
+            # 解绑 <Return>，让文本框可以正常使用回车换行
+            win.bind("<Control-Return>", lambda e: (submit(), "break")) # 兼容 Ctrl+Enter
             win.bind("<Escape>", lambda e: win.destroy())
 
     def edit_system_prompt(self):
@@ -4680,69 +5312,304 @@ class GamePage(tk.Frame):
 
         client = self.app.app_state["client"]
         model = self.app.app_state["model"]
-        
-        # ========== 省 TOKEN 核心逻辑 ==========
-        msgs = c["messages"]
-        msgs_to_send =[]
-        
-        if c.get("adv_save_token", True):
-            # 模式开启：提取系统设定 + 最近1200字的纯履历
-            system_msgs = [x for x in msgs if x["role"] == "system"]
-            hist = self.history_text.get("1.0", "end").strip()
-            recent_hist = hist[-1200:] if len(hist) > 1200 else hist
-            if recent_hist:
-                recent_hist = "...\n" + recent_hist
-                
-            combined_user_content = f"【最近的人生履历(供参考剧情背景)】\n{recent_hist}\n\n【当前状态与行动指令】\n{full_msg}"
-            msgs_to_send = system_msgs +[{"role": "user", "content": combined_user_content}]
-        else:
-            # 模式关闭：原始的保留上下文法
-            if len(msgs) > 40:
-                system_msgs =[x for x in msgs if x["role"] == "system"][:4]
-                tail = msgs[-30:]
-                msgs_to_send = system_msgs + tail
-            else:
-                msgs_to_send = msgs
-                
-        c["_last_payload"] = msgs_to_send  # 记录当前即将发送的内容供玩家查看
 
-        def worker():
-            raw_text = "（API 请求失败，未获取到返回内容或网络超时）"
-            try:
-                resp = client.chat.completions.create(
-                    model=model,
-                    messages=msgs_to_send,
-                    temperature=0.9,
-                )
-
-                raw_text = resp.choices[0].message.content
-                c["messages"].append({"role": "assistant", "content": raw_text})
-
-                d = parse_ai_json(raw_text)
-
-                self.after(0, lambda: callback(d))
-
-            except Exception as e:
-                if c["messages"] and c["messages"][-1]["role"] == "assistant":
-                    c["messages"].pop()
-                if c["messages"] and c["messages"][-1]["role"] == "user":
-                    c["messages"].pop()
-
-                err = str(e)
-                self._pending_retry = (user_msg, callback)
-                self._last_raw_response = raw_text  
-
-                def show_error():
-                    messagebox.showerror(
-                        "错误",
-                        f"AI 出错或返回格式不对：\n{err}\n\n"
-                        f"点「🔁 重试上一次请求」会重新调用 API（不会推进时间、不会重掷事件骰子）。",
+       # =====================================================================
+        # 内部函数：调用主 API -> (可选) 审查官 API -> 解析 JSON -> (可选) Helper API 修复
+        # =====================================================================
+        def run_main_api(final_msgs_to_send):
+            c["_last_payload"] = final_msgs_to_send  # 记录发送的内容供查看
+            
+            def worker():
+                raw_text = ""
+                try:
+                    # 获取保存的模型参数
+                    api_params = self.app.app_state.get("api_params", {"temperature": 0.8, "top_p": 1.0, "top_k": 50})
+                    
+                    # 1. 调用主 API
+                    resp = client.chat.completions.create(
+                        model=model,
+                        messages=final_msgs_to_send,
+                        temperature=api_params["temperature"],
+                        top_p=api_params["top_p"],
+                        extra_body={"top_k": api_params["top_k"]} # extra_body ensures OpenAI library passes Top_K to DeepSeek/Anthropic endpoints without throwing an error
                     )
-                    self.show_retry_button()
+                    raw_text = resp.choices[0].message.content or ""
 
-                self.after(0, show_error)
+                    # =========================================================
+                    # NEW: ⚖️ 严苛审查模式 (Audit API)
+                    # =========================================================
+                    if c.get("adv_audit_mode"):
+                        self.after(0, lambda: self.set_loading("⚖️ 审查官 AI 正在核验数值平衡与格式..."))
+                        
+                        import keyring
+                        audit_cfg = load_config().get("audit_api", {})
+                        a_url = audit_cfg.get("base_url", "https://api.deepseek.com/v1")
+                        a_key = keyring.get_password("AILifeRemake", "audit_api_key") or client.api_key
+                        a_model = audit_cfg.get("model", "deepseek-chat")
+                        
+                        audit_client = OpenAI(base_url=a_url, api_key=a_key)
+                        
+                        # 构建审查官的 System Prompt
+                        audit_prompt = f"""你是一个无情的游戏数值平衡与 JSON 格式审查官。
+这是叙事 AI 刚刚为玩家生成的 JSON 输出。你的唯一任务是修复格式，并在有离谱属性的情况下**严格平衡它给出的离谱数值奖励**。
 
-        threading.Thread(target=worker, daemon=True).start()
+【当前角色状态】：
+{self.get_state_brief()}
+
+【绝对准则】：
+1. 核心属性（STR, CON, POW, DEX, APP, SIZ, INT, CRE, HMR, END, LIB, SEN, LOV, EXP等）绝对不允许出现在 adjustments 中。如果有，直接无情删除。
+2. 派生浮动属性（ASSET, FAME, EXPE, KNOW, HEAT, MYSTERY, INTEGRITY等）单次变动一般应当在 ±1 到 ±6 之间。如果主 AI 给出了如 +20, +40 这种破坏平衡的数值，请将其强制修改为合理的数值。所有数值的上限都是100并且100都代表“世界第一/世界前十”的级别。请仔细考虑平衡。
+3. 如果调整使用了 _GROWTH 后缀（如 FAME_GROWTH: 1），这是合法的成长检定次数，一般 1-2 次即可，若大于 3 次请思考是否合理。
+4. 你必须修复任何大括号不匹配、少逗号等 JSON 语法错误。
+5. 保持原有的 narrative 和 choices 文字内容不变。
+6. 绝对不要输出任何 markdown 标记（如 ```json），直接输出合法的纯 JSON 对象。
+
+JSON输出格式：（严格 JSON，只输出 JSON）
+{{
+  "narrative": "Lorem Ipsum",
+  "has_choice": false,
+  "choices": {{
+    "A": {{"text": "Lorem Ipsum", "checks": ["ASSET"], "difficulty": ""}},
+    "B": {{"text": "Lorem Ipsum", "checks": ["INT","EXPE"], "difficulty": "easy"}}
+    "C": {{"text": "Lorem Ipsum", "checks": ["STR"], "difficulty": "easy"}}
+  }},
+  "adjustments": {{"HP": -2, "FAME_GROWTH": 1, "ASSET": -10}},
+  "alive": true,
+  "cause_of_death": null
+}}
+
+【主 AI 的原始输出】：
+{raw_text}
+"""
+                        try:
+                            a_resp = audit_client.chat.completions.create(
+                                model=a_model,
+                                messages=[{"role": "user", "content": audit_prompt}],
+                                temperature=0.2, # 极低温度，不需要创造力，只要执行力
+                            )
+                            # 用审查官洗过的文本覆盖原始文本
+                            raw_text = a_resp.choices[0].message.content.strip()
+                        except Exception as e:
+                            print(f"[审查官 API 调用失败，退回原始文本] {e}")
+                    # =========================================================
+
+                    # 将最终文本写入历史记录
+                    c["messages"].append({"role": "assistant", "content": raw_text})
+
+                    # 3. 尝试解析 JSON
+                    try:
+                        d = parse_ai_json(raw_text)
+                        self.after(0, lambda: callback(d))
+                        
+                    except Exception as json_err:
+                        if c.get("adv_stability"):
+                            import keyring 
+                            helper_cfg = load_config().get("helper_api", {})
+                            h_url = helper_cfg.get("base_url", "https://api.deepseek.com/v1")
+                            h_key = keyring.get_password("AILifeRemake", "helper_api_key")
+                            if not h_key: h_key = client.api_key
+                            h_model = helper_cfg.get("model", "deepseek-v4-flash")
+                            
+                            try: max_retries = int(helper_cfg.get("max_retries", 1))
+                            except Exception: max_retries = 1
+                                
+                            helper_client = OpenAI(base_url=h_url, api_key=h_key)
+                            
+                            fix_prompt = f"""你是一个严格的 JSON 修复助手。
+下面是一段游戏 AI 生成的损坏/混合了其他文字的 JSON 输出。
+如果这段文字明显是 AI 的道德审查拒绝或道歉（例如包含“我无法满足”、“作为一个AI”等），请直接且仅输出数字：1。
+否则，请提取其中的 narrative, choices, adjustments 等数据，并严格输出合法的 JSON 对象。绝对不要输出任何 markdown 标记。
+
+输出格式：（严格 JSON，只输出 JSON）
+{{
+  "narrative": "Lorem Ipsum",
+  "has_choice": false,
+  "choices": {{
+    "A": {{"text": "Lorem Ipsum", "checks": ["ASSET"], "difficulty": ""}},
+    "B": {{"text": "Lorem Ipsum", "checks": ["INT","EXPE"], "difficulty": "easy"}}
+    "C": {{"text": "Lorem Ipsum", "checks": ["STR"], "difficulty": "easy"}}
+  }},
+  "adjustments": {{"Lorem": -2, "Lorem Ipsum": 1, "Lorem Ipsum": -10}},
+  "alive": true,
+  "cause_of_death": null
+}}
+
+【原始损坏文本】：
+{raw_text}"""
+                            success = False
+                            helper_last_err = None
+                            
+                            for attempt in range(max_retries):
+                                self.after(0, lambda a=attempt+1, m=max_retries: self.set_loading(f"主 AI 格式损坏，Helper 正在尝试修复 ({a}/{m})..."))
+                                try:
+                                    h_resp = helper_client.chat.completions.create(
+                                        model=h_model,
+                                        messages=[{"role": "user", "content": fix_prompt}],
+                                        temperature=0.1,
+                                    )
+                                    fixed_text = h_resp.choices[0].message.content.strip()
+                                    if fixed_text == "1":
+                                        raise Exception("REFUSED_BY_MAIN_API")
+                                        
+                                    d = parse_ai_json(fixed_text)
+                                    c["messages"][-1]["content"] = fixed_text
+                                    self.after(0, lambda data=d: callback(data))
+                                    success = True
+                                    break
+                                except Exception as e:
+                                    helper_last_err = e
+                                    if str(e) == "REFUSED_BY_MAIN_API": break
+                                        
+                            if not success:
+                                if str(helper_last_err) == "REFUSED_BY_MAIN_API":
+                                    raise Exception("请求被主 API 拒绝（通常是触发了内容审查）。")
+                                else:
+                                    raise Exception(f"Helper 修复 {max_retries} 次失败。原错误: {json_err}")
+                                    
+                        else:
+                            raise json_err 
+
+                except Exception as e:
+                    # 失败回滚
+                    if c["messages"] and c["messages"][-1].get("role") == "assistant":
+                        c["messages"].pop()
+                    if c["messages"] and c["messages"][-1].get("role") == "user":
+                        c["messages"].pop()
+
+                    err = str(e)
+                    self._pending_retry = (user_msg, callback)
+                    self._last_raw_response = raw_text  
+
+                    def show_error():
+                        if "请求被主 API 拒绝" in err:
+                            messagebox.showwarning("🚫 请求被拒绝", "主 API 拒绝了本次请求（触发内容审查）。\n请调整尺度后重试。")
+                        else:
+                            messagebox.showerror("错误", f"AI 出错或返回格式不对：\n{err}\n\n点「🔁 重试上一次请求」重新调用。")
+                        self.show_retry_button()
+
+                    self.after(0, show_error)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        # =====================================================================
+        # 判断：启动 涡轮省Token 还是 原版省Token
+        # =====================================================================
+        if c.get("adv_turbo_mode"):
+            def turbo_worker():
+                sys_msgs = [x for x in c["messages"] if x["role"] == "system"]
+                chat_msgs = [x for x in c["messages"] if x["role"] != "system"]
+                
+                turbo_cfg = load_config().get("turbo_api", {})
+                try: N = int(turbo_cfg.get("interval", 15))
+                except: N = 15
+                try: M = int(turbo_cfg.get("retain", 4))
+                except: M = 4
+                
+                # 当前聊天记录里，除了刚刚加进去的一条 user_msg，前面配对完成的对话数为 completed_turns
+                completed_turns = (len(chat_msgs) - 1) // 2
+                
+                if completed_turns >= N + M:
+                    self.after(0, lambda: self.set_loading(f"上下文剧情压缩中：正在将前 {N} 回合记忆压缩..."))
+                    
+                    to_compress = chat_msgs[: N * 2] # 提取要压缩的 N 轮对话
+                    text_to_compress = ""
+                    
+                    # 💡 改进：压缩前剥离 JSON 格式，只提取纯净的叙事和玩家行动
+                    for msg in to_compress:
+                        if msg["role"] == "user":
+                            content = msg["content"]
+                            if "】\n\n" in content:
+                                content = content.split("】\n\n")[-1] # 去掉状态栏，只保留事件/行动
+                            text_to_compress += f"【玩家/命运】：{content}\n"
+                        else:
+                            try:
+                                data = parse_ai_json(msg["content"])
+                                text_to_compress += f"【AI推演】：{data.get('narrative', '')}\n\n"
+                            except:
+                                text_to_compress += f"【AI推演】：{msg['content']}\n\n"
+                    
+                    prompt = f"请将以下这 {N} 个回合的跑团/剧情记录，浓缩为 300-600 字的精简剧情摘要。\n提取关键的事件、人物关系变化、核心属性的增减。切勿遗漏重要的伏笔或尚未完成的任务。\n\n【跑团记录如下】：\n{text_to_compress}"
+                    
+                    try:
+                        import keyring
+                        t_url = turbo_cfg.get("base_url", "https://api.deepseek.com/v1")
+                        t_key = keyring.get_password("AILifeRemake", "turbo_api_key") or client.api_key
+                        t_model = turbo_cfg.get("model", "deepseek-v4-flash")
+                        
+                        t_client = OpenAI(base_url=t_url, api_key=t_key)
+                        t_resp = t_client.chat.completions.create(
+                            model=t_model,
+                            messages=[{"role": "user", "content": prompt}],
+                            temperature=0.3,
+                        )
+                        summary = t_resp.choices[0].message.content.strip()
+                        c.setdefault("turbo_summaries", []).append(summary)
+                        
+                        # 截断已被压缩的对话历史
+                        c["messages"] = sys_msgs + chat_msgs[N * 2 :]
+                        chat_msgs = [x for x in c["messages"] if x["role"] != "system"]
+                        
+                    except Exception as e:
+                        print(f"涡轮压缩失败，跳过本次压缩: {e}")
+                
+                # 重新组装主 API 发送包
+                final_msgs = list(sys_msgs)
+                summaries = c.get("turbo_summaries", [])
+                if summaries:
+                    mem_text = "\n\n".join([f"第{i+1}段被压缩的历史记忆：\n{s}" for i, s in enumerate(summaries)])
+                    final_msgs.append({"role": "system", "content": f"【过往历史记忆（供参考剧情背景）】\n{mem_text}"})
+                
+                # 💡 改进：对于保留下来的近期对话，同样剥离 JSON，采用“基础省Token”的干净文本逻辑
+                recent_chat_msgs = chat_msgs[:-1] # 排除刚才加入的最后一条用户提问
+                recent_text = ""
+                for msg in recent_chat_msgs:
+                    if msg["role"] == "user":
+                        content = msg["content"]
+                        if "】\n\n" in content:
+                            content = content.split("】\n\n")[-1]
+                        recent_text += f"【行动/事件】：{content}\n"
+                    else:
+                        try:
+                            data = parse_ai_json(msg["content"])
+                            recent_text += f"【推演】：{data.get('narrative', '')}\n\n"
+                        except:
+                            recent_text += f"【推演】：{msg['content']}\n\n"
+                            
+                if recent_text:
+                    recent_text = "...\n" + recent_text
+                else:
+                    recent_text = "（无）"
+                    
+                combined_user_content = f"【最近的人生履历(供参考剧情背景)】\n{recent_text}\n\n【当前状态与行动指令】\n{full_msg}"
+                final_msgs.append({"role": "user", "content": combined_user_content})
+                
+                self.after(0, lambda: run_main_api(final_msgs))
+
+            threading.Thread(target=turbo_worker, daemon=True).start()
+
+        else:
+            # === 原版的 普通省Token / 不省Token 逻辑 ===
+            msgs = c["messages"]
+            if c.get("adv_save_token", True):
+                system_msgs = [x for x in msgs if x["role"] == "system"]
+                hist = self.history_text.get("1.0", "end").strip()
+                
+                # 💡 改进：将记忆截断上限从 1200 字符大幅提升到 10000 字符，修复 AI 遗忘症
+                recent_hist = hist[-40000:] if len(hist) > 40000 else hist
+                if len(hist) > 40000: 
+                    recent_hist = "...\n" + recent_hist
+                    
+                combined_user_content = f"【最近的人生履历(供参考剧情背景)】\n{recent_hist}\n\n【当前状态与行动指令】\n{full_msg}"
+                msgs_to_send = system_msgs + [{"role": "user", "content": combined_user_content}]
+            else:
+                if len(msgs) > 40:
+                    system_msgs = [x for x in msgs if x["role"] == "system"][:4]
+                    tail = msgs[-30:]
+                    msgs_to_send = system_msgs + tail
+                else:
+                    msgs_to_send = msgs
+            
+            run_main_api(msgs_to_send)
 # ============================================================
 # Store Mode (通马桶模拟器) 流程
 # ============================================================
@@ -4958,6 +5825,13 @@ class GamePage(tk.Frame):
         ]:
             ttk.Button(bf, text=label, style="Secondary.TButton",
                     command=lambda p=prob: self.set_store_tone(p)).pack(side="left", padx=6)
+        c = self.app.character
+        if c.get("adv_custom_prob"):
+            ttk.Separator(self.control_frame, orient="horizontal").pack(fill="x", pady=10)
+            ttk.Button(
+                self.control_frame, text="⚙️ 自定义事件几率", 
+                style="Secondary.TButton", command=self.adjust_event_prob
+            ).pack()
 
     def set_store_tone(self, prob):
         c = self.app.character

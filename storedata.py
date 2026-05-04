@@ -817,7 +817,7 @@ def build_reject_normal_prompt(c, client_name="客户"):
 # 天赋池（占位，后面慢慢补）
 # ============================================================
 
-TALENT_POOL_ANY = [
+TALENT_POOL = [
     # ============ NEGATIVE (12个) ============
     {"name": "酒鬼", "rarity": "negative", "mode": "Store", "scenarios": ["any"],
      "desc": "没有酒，你什么都干不了。",

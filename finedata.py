@@ -184,11 +184,24 @@ def apply_starting_experience(c):
             c["edu"] = c.get("edu", 0) + edu_gain
             logs.append(f"开局前历练/开蒙 +{edu_gain}")
 
-    # General life knowledge.
+    # 找到以下这段并修改：
     knowledge_gain = max(0, start_age // 5)
     if knowledge_gain:
-        c["knowledge"] = c.get("knowledge", 0) + knowledge_gain
+        # 把 knowledge 统一改回 know
+        c["know"] = c.get("know", 0) + knowledge_gain
         logs.append(f"开局前知识 +{knowledge_gain}")
+
+    # 将之前的 edu_gain 也合并进 know 中（因为 edu 属性已经被你删了）
+    if c.get("has_compulsory_edu"):
+        edu_gain = min(start_age, 18)
+        if edu_gain > 0:
+            c["know"] = c.get("know", 0) + edu_gain
+            logs.append(f"开局前受教育 +{edu_gain}")
+    else:
+        edu_gain = min(start_age // 4, 6)
+        if edu_gain > 0:
+            c["know"] = c.get("know", 0) + edu_gain
+            logs.append(f"开局前历练/开蒙 +{edu_gain}")
 
     # Adult years may accumulate some assets, but very slowly.
     adult_years = max(0, start_age - 18)
