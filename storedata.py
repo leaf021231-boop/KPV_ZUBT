@@ -87,42 +87,37 @@ INTEGRITY_TIERS = [
 ]
 
 
-# ============================================================
+    # ============================================================
 # TRACKERS（GamePage 右侧面板用）
 # ============================================================
 
 TRACKERS = {
-    "assets": {
-        "label": "家底",
-        "adjustment_key": "ASSET",
-        "initial": 0,
-        "tiers": BASE_ASSET_TIERS,
-    },
+    # ASSET has been removed as requested!
     "mystery": {
         "label": "神秘度",
         "adjustment_key": "MYSTERY",
-        "initial": 10,
+        "initial": 25,
         "tiers": MYSTERY_TIERS,
     },
     "reputation": {
         "label": "名声",
         "adjustment_key": "REPUTATION",
-        "initial": 0,
+        "initial": 50,
         "tiers": REPUTATION_TIERS,
     },
     "integrity": {
         "label": "操守",
         "adjustment_key": "INTEGRITY",
-        "initial": 0,
+        "initial": 50,
         "tiers": INTEGRITY_TIERS,
     },
     "heat": {
         "label": "风波",
         "adjustment_key": "HEAT",
         "initial": 0,
-        "tiers": None,        # 直接显示 0~10
+        "tiers": None,        # 直接显示数值
         "min": 0,
-        "max": 10,
+        "max": 100,           # NOW 100 BASED!
     },
 }
 
@@ -223,9 +218,40 @@ def format_history_header(c):
 # ============================================================
 
 def init_trackers(c):
+    # Base initialization
     for key, cfg in TRACKERS.items():
         c[key] = cfg.get("initial", 0)
     init_store_state(c)
+    
+    # NEW: Calculate initial stats based on character attributes
+    attrs = c.get("final_attributes", {})
+    int_stat = attrs.get("INT", 30)
+    end_stat = attrs.get("END", 30)
+    cre_stat = attrs.get("CRE", 30)
+    hmr_stat = attrs.get("HMR", 30)
+    str_stat = attrs.get("STR", 30)
+    app_stat = attrs.get("APP", 30)
+
+    # MYSTERY: (INT + END - CRE - HMR), bounded between 25 and 75
+    myst = int_stat + end_stat - cre_stat - hmr_stat
+    c["mystery"] = max(25, min(75, myst))
+    
+    # HEAT always starts at 0
+    c["heat"] = 0
+    
+    # REPUTATION starts at 50, gets instant growth bonuses
+    c["reputation"] = 50
+    if hmr_stat >= 50:
+        c["reputation"] += roll_dice("1d6")
+    if str_stat >= 50:
+        c["reputation"] += roll_dice("1d6")
+        
+    # INTEGRITY starts at 50, gets instant growth bonuses
+    c["integrity"] = 50
+    if app_stat >= 50:
+        c["integrity"] += roll_dice("1d6")
+    if cre_stat >= 50:
+        c["integrity"] += roll_dice("1d6")
 
 
 def init_store_state(c):
@@ -369,28 +395,17 @@ def auto_abandon_expired_commissions(c, max_delay=COMMISSION_AUTO_ABANDON_DELAYS
 
 def roll_event_kind(c):
     """
-    在"今旬有事发生"这个前提下，决定事件类型。
-    返回 'k' / 'n' / 'l' 之一。
+    决定是新客户还是老客户 (麻烦事件 'k' 已经在 main.py 里单独判定了)
+    返回 'n' 或 'l' 之一。
     """
-    heat = c.get("heat", 0)
-    p_k = min(0.06 * heat, 0.6)
-    remaining = 1.0 - p_k
-
     x = len(get_active_clients(c))
     new_appetite = max(0.3, 0.9 - 0.03 * x)
 
-    p_n = new_appetite * remaining
-    p_l = (1.0 - new_appetite) * remaining
-
-    # 没有老客户时，把 P(l) 全部转给 P(n)
+    # 没有老客户时，强制来新客户
     if x == 0:
-        p_n += p_l
-        p_l = 0.0
+        return "n"
 
-    r = random.random()
-    if r < p_k:
-        return "k"
-    if r < p_k + p_n:
+    if random.random() < new_appetite:
         return "n"
     return "l"
 
@@ -513,7 +528,7 @@ def build_system_prompt(c):
 【🎲 鉴定系统（核心机制）】
 本模式由程序投 1d100 vs 属性来决定成败，**你不再决定胜负**。
 - 你给出的每个选项必须包含两个字段：checks（1-2 个属性键）和 difficulty。
-- 难度对应的程序行为：
+- 你可以使用核心属性(STR/CRE/HMR/INT/APP/END) 以及 派生属性(MYSTERY/REPUTATION/INTEGRITY)。
     * "easy"   = 双骰取优（更容易过）
     * "normal" = 单骰（标准）
     * "hard"   = 双骰取劣（极难，**只用在真正棘手的情境**）
@@ -1625,6 +1640,13 @@ TALENT_POOL = [
      "modifiers": [("INT", "+2d3*5"), ("HMR", "-2d3*5")],
      "narrative": "你知道的秘密能让整个武林翻天。但也正因如此,正邪两道都想要你的命。"},
 ]
+
+import betweentheworlds_sc
+TALENT_POOL.extend(betweentheworlds_sc.TALENT_POOL_STORE)
+import distantshore_sc
+TALENT_POOL.extend(distantshore_sc.TALENT_POOL_STORE)
+import fallout_sc
+TALENT_POOL.extend(fallout_sc.TALENT_POOL_STORE)
 
 # ============================================================
 # 拖延 / 死亡总结

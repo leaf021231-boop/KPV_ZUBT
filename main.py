@@ -70,7 +70,7 @@ from storedata import (
     init_store_state,
 )
 
-VERSION = "v0.7.5.1 ANGELICSPHERE"
+VERSION = "v0.8.0.1 LEVITHAN"
 
 TALENT_USER_PATH = os.path.join(os.path.expanduser("~"), ".ai_life_remake_talents.json")
 
@@ -347,7 +347,9 @@ def make_bottom(parent):
 # ============================================================
 
 class TalentEditor(tk.Toplevel):
-    SCENARIO_TAGS = ["citywalk", "dragonfire", "flyaway", "loneblade"]
+    # 动态抓取 data.py 中 SCENES 列表里所有的 scenario_tag 并去重排序
+    SCENARIO_TAGS = sorted(list(set(sc["scenario_tag"] for sc in SCENES)))
+    
     RARITY_OPTIONS = [
         ("negative", "负面"), ("common", "普通"),
         ("rare", "稀有"), ("legendary", "传奇"), ("wildcard", "特殊"),
@@ -355,6 +357,8 @@ class TalentEditor(tk.Toplevel):
     # ================= 修改这里：加入新的模式 =================
     MODE_OPTIONS = [
         ("Normal", "普通"), 
+        #("Horni", "性压抑"),
+        ("HorniIntense", "真的很性压抑"),
         ("Store", "通马桶(Store)")
     ]
     # =========================================================
@@ -459,16 +463,27 @@ class TalentEditor(tk.Toplevel):
         _label(3, "场景")
         sc_frame = tk.Frame(form, bg=COLORS["card"])
         sc_frame.grid(row=3, column=1, sticky="w", pady=4)
+        
+        # 设定每行最多显示几个 checkbox（你可以根据你的窗口宽度调整，4 或 5 比较合适）
+        MAX_COLS = 4 
+
+        # 放置 "any" (固定在第 0 个位置)
         ttk.Checkbutton(
             sc_frame, text="any（全部）", variable=self.scenario_any_var,
             style="Card.TCheckbutton", command=self._toggle_any,
-        ).pack(side="left", padx=4)
-        for tag in self.SCENARIO_TAGS:
+        ).grid(row=0, column=0, sticky="w", padx=4, pady=2)
+
+        # 遍历动态生成的场景 tag
+        for i, tag in enumerate(self.SCENARIO_TAGS):
+            idx = i + 1  # 因为 any 占了第 0 个位置，所以其它从 1 开始排
+            r = idx // MAX_COLS  # 计算行号
+            c = idx % MAX_COLS   # 计算列号
+            
             ttk.Checkbutton(
                 sc_frame, text=tag, variable=self.scenario_vars[tag],
                 style="Card.TCheckbutton",
                 command=lambda: self.scenario_any_var.set(False),
-            ).pack(side="left", padx=4)
+            ).grid(row=r, column=c, sticky="w", padx=4, pady=2)
 
         _label(4, "描述")
         self.desc_text = tk.Text(form, height=2, font=F_BODY, bg="#FAFBFE",
@@ -493,6 +508,23 @@ class TalentEditor(tk.Toplevel):
             mod_outer, text="+ 添加加成", style="Ghost.TButton",
             command=lambda: self._add_modifier_row(),
         ).pack(anchor="w", pady=4)
+
+        # --- 👇 RESTORED UI ELEMENTS: Moved back inside _build() ---
+        tip = tk.Label(
+            form,
+            text="加成示例：+1d6  /  -1d2*5  /  +10  /  -2*5",
+            bg=COLORS["card"], fg=COLORS["muted"], font=F_SMALL,
+        )
+        tip.grid(row=7, column=1, sticky="w", pady=(0, 6))
+
+        btn_row = tk.Frame(card, bg=COLORS["card"])
+        btn_row.pack(fill="x", padx=14, pady=(0, 14))
+
+        ttk.Button(btn_row, text="清空表单", style="Secondary.TButton",
+                   command=self._reset_form).pack(side="left")
+        ttk.Button(btn_row, text="💾 保存", style="Primary.TButton",
+                   command=self._save_current).pack(side="right")
+        # -----------------------------------------------------------
 
     def _export_talents(self):
         path = filedialog.asksaveasfilename(
@@ -531,21 +563,6 @@ class TalentEditor(tk.Toplevel):
                     messagebox.showerror("错误", "读取的文件格式不正确。", parent=self)
             except Exception as e:
                 messagebox.showerror("导入失败", str(e), parent=self)
-
-        tip = tk.Label(
-            form,
-            text="加成示例：+1d6  /  -1d2*5  /  +10  /  -2*5",
-            bg=COLORS["card"], fg=COLORS["muted"], font=F_SMALL,
-        )
-        tip.grid(row=7, column=1, sticky="w", pady=(0, 6))
-
-        btn_row = tk.Frame(card, bg=COLORS["card"])
-        btn_row.pack(fill="x", padx=14, pady=(0, 14))
-
-        ttk.Button(btn_row, text="清空表单", style="Secondary.TButton",
-                   command=self._reset_form).pack(side="left")
-        ttk.Button(btn_row, text="💾 保存", style="Primary.TButton",
-                   command=self._save_current).pack(side="right")
 
     def _toggle_any(self):
         if self.scenario_any_var.get():
@@ -705,7 +722,7 @@ class TalentEditor(tk.Toplevel):
             mode_val = t.get("mode", "Normal")
             mode_dict = {
                 "Normal": "普通", 
-                "Horni": "性压抑", 
+                #"Horni": "性压抑", 
                 "HorniIntense": "真的很性压抑", 
                 "Store": "通马桶"
             }
@@ -1286,6 +1303,20 @@ class DisclaimerPage(tk.Frame):
         changelog_text = (
             f"{VERSION} 更新：\n"
             "- Github发行的健康版。\n\n"
+            "v0.8.0 LEGACY 更新：\n"
+            "- 添加了新剧本：1920年代（欧洲）。\n"
+            "- 添加了新剧本：1920年代（中国）。\n"
+            "- 添加了新剧本：末日之后\n"
+            "- 添加了自制剧本制作工具ScenarioCreatorTool。\n"
+            "- 添加了自制剧本导入功能。\n\n"
+            "v0.7.5.3 MAGNOLIA 更新：\n"
+            "- Github发行的健康版。\n\n"
+            "v0.7.5.2 ENTRANCE 更新：\n"
+            "- 修复了通马桶模式中导入特质会导致游戏崩溃的问题。\n"
+            "- 修复了SAIRAI版本中特质编辑器无法保存的问题。\n"
+            "- 修复了通马桶模式中浮动数据没有正确的根据核心属性派生的问题。\n\n"
+            "v0.7.5.1 ANGELICSPHERE 更新：\n"
+            "- Github发行的健康版。\n\n"
             "v0.7.5 SAIRAI 更新：\n"
             "- 修复了微调模式下浮动属性无法正常增长的问题。\n"
             "- 修复了AI输入小写格式的属性修改时，系统无法识别修改得问题。\n\n"
@@ -1376,7 +1407,7 @@ class DisclaimerPage(tk.Frame):
             "- 第一个新架构的版本\n\n\n\n\n\n\n\n\n\n"
             "我永远喜欢UMP45"
         )
-
+        
         log_lbl = tk.Label(
             card, text=changelog_text, bg=COLORS["card"], fg=COLORS["subtext"],
             font=F_SMALL, justify="left"
@@ -1397,13 +1428,7 @@ import os
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
-from cryptography.fernet import Fernet
-# (Assuming OpenAI, load_config, save_config, Card, TopBar, etc. are imported above)
-
-import os
 import json
-from cryptography.fernet import Fernet
-
 import keyring
 import keyring.errors
 
@@ -1953,6 +1978,15 @@ class ScenePage(tk.Frame):
             command=self.app.load_game_state,
         ).pack(side="left", padx=8)
 
+        # ====== 新增：导入剧本包 ======
+        ttk.Button(
+            bottom,
+            text="📥 导入 JSON 剧本包",
+            style="Ghost.TButton",
+            command=self.import_json_scenario,
+        ).pack(side="left", padx=8)
+        # ============================
+
         ttk.Button(
             bottom,
             text="下一步 →",
@@ -2003,6 +2037,7 @@ class ScenePage(tk.Frame):
         auto_wrap(lbl)
 
         # Scenes.
+        # Scenes.
         for sc in SCENES:
             outer, card = Card(inner)
             outer.pack(fill="x", pady=6)
@@ -2010,17 +2045,27 @@ class ScenePage(tk.Frame):
             top = tk.Frame(card, bg=COLORS["card"])
             top.pack(fill="x", padx=18, pady=(12, 4))
 
+            # 把 anchor="w" 改成 pack(side="left")，给右边的删除按钮腾位置
             ttk.Radiobutton(
                 top,
                 text=f"{sc['name']}　[{sc['scenario_tag']}]",
                 variable=self.selected,
                 value=sc["id"],
                 style="Card.TRadiobutton",
-            ).pack(anchor="w")
+            ).pack(side="left")
+
+            # 动态判断：如果是导入的剧本，则在右边生成一个删除按钮
+            if sc.get("_is_custom_json"):
+                ttk.Button(
+                    top, 
+                    text="🗑️ 删除", 
+                    style="Danger.TButton", 
+                    command=lambda s=sc: self.delete_custom_scenario(s)
+                ).pack(side="right")
 
             lbl = tk.Label(
                 card,
-                text=sc["desc"],
+                text=sc.get("desc", ""),
                 bg=COLORS["card"],
                 fg=COLORS["subtext"],
                 font=F_SMALL,
@@ -2028,6 +2073,7 @@ class ScenePage(tk.Frame):
             )
             lbl.pack(anchor="w", fill="x", padx=42, pady=(0, 12))
             auto_wrap(lbl)
+        
 
         outer, card = Card(inner)
         outer.pack(fill="x", pady=8)
@@ -2160,6 +2206,78 @@ class ScenePage(tk.Frame):
             adv_row, text="🛠 默认提示词编辑器", style="Secondary.TButton",
             command=lambda: GlobalPromptEditor(self.app, self.app),
         ).pack(side="left", padx=4)
+
+    def import_json_scenario(self):
+        path = filedialog.askopenfilename(
+            filetypes=[("JSON 剧本包", "*.json")], 
+            title="导入自定义剧本"
+        )
+        if not path:
+            return
+            
+        import shutil
+        from data import CUSTOM_SCENARIO_DIR, load_custom_json_scenarios
+        
+        try:
+            # 1. 复制文件到游戏的自定义剧本目录
+            filename = os.path.basename(path)
+            dest = os.path.join(CUSTOM_SCENARIO_DIR, filename)
+            shutil.copy(path, dest)
+            
+            # 2. 重新执行加载脚本
+            load_custom_json_scenarios()
+            
+            # 3. 刷新当前的 ScenePage 显示
+            messagebox.showinfo("成功", f"剧本 {filename} 已成功导入！", parent=self)
+            
+            # --- 修复 UI 刷新机制 ---
+            old_page = self.app.pages["ScenePage"]
+            new_page = ScenePage(self.app.container, self.app)
+            self.app.pages["ScenePage"] = new_page
+            new_page.grid(row=0, column=0, sticky="nsew")
+            self.app.show_page("ScenePage")
+            old_page.destroy() # 彻底销毁旧的幽灵页面
+            
+        except Exception as e:
+            messagebox.showerror("导入失败", str(e), parent=self)
+            
+        except Exception as e:
+            messagebox.showerror("导入失败", str(e), parent=self)
+
+    def delete_custom_scenario(self, sc):
+        import os
+        from data import CUSTOM_SCENARIO_DIR, load_custom_json_scenarios
+        
+        name = sc.get("name", "未知剧本")
+        if not messagebox.askyesno("删除剧本", f"确定要彻底删除导入的剧本《{name}》吗？\n（相关的专属天赋也会一并被移除）"):
+            return
+            
+        filename = sc.get("_json_filename")
+        if filename:
+            filepath = os.path.join(CUSTOM_SCENARIO_DIR, filename)
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception as e:
+                messagebox.showerror("删除失败", str(e), parent=self)
+                return
+                
+        # 1. 重新读取文件夹，刷新底层数据
+        load_custom_json_scenarios()
+        
+        # 2. 如果当前正好选中了要删的剧本，清空选中状态
+        if self.selected.get() == sc["id"]:
+            self.selected.set("")
+        
+        # 3. --- 修复 UI 刷新机制 ---
+        old_page = self.app.pages["ScenePage"]
+        new_page = ScenePage(self.app.container, self.app)
+        self.app.pages["ScenePage"] = new_page
+        new_page.grid(row=0, column=0, sticky="nsew")
+        self.app.show_page("ScenePage")
+        old_page.destroy() # 彻底销毁旧的幽灵页面
+        
+        messagebox.showinfo("已删除", f"剧本《{name}》已成功删除。", parent=self.app)
 
     def go_next(self):
         sid = self.selected.get()
@@ -2335,6 +2453,8 @@ class IdentityPage(tk.Frame):
 
         content_options = [
             (CONTENT_NORMAL, "普通人生", "世间百态", "normal"),
+            #(CONTENT_HORNY, "我有性压抑", "特殊属性和一些独特特质。", "normal"),
+            #(MODE_HORNY_INTENSE, "我真的有性压抑", "⚠️ 必须开启微调模式且年龄≥18。目前只对女主视优化。", "normal"), # <--- NEW
             (CONTENT_STORE, "我要通马桶", "扮演神秘NPC接受委托和解决委托。", "normal"),
         ]
 
@@ -2620,7 +2740,7 @@ class StoreKeeperPage(tk.Frame):
         inner = tk.Frame(body, bg=COLORS["bg"])
         inner.pack(fill="both", expand=True, padx=40, pady=20)
 
-        # ---- 原型选择 ----
+        # ---- 1. 原型选择 ----
         outer, card = Card(inner)
         outer.pack(fill="x", pady=8)
 
@@ -2640,7 +2760,7 @@ class StoreKeeperPage(tk.Frame):
             lbl.pack(anchor="w", fill="x")
             auto_wrap(lbl)
 
-        # ---- 自定义原型名 ----
+        # ---- 2. 自定义原型名 ----
         outer, card = Card(inner)
         outer.pack(fill="x", pady=8)
 
@@ -2651,13 +2771,7 @@ class StoreKeeperPage(tk.Frame):
         self.custom_entry = ttk.Entry(card, textvariable=self.custom_name_var)
         self.custom_entry.pack(fill="x", padx=18, pady=(0, 12))
 
-        # ---- 背景故事（必填） ----
-        outer, card = Card(inner)
-        outer.pack(fill="x", pady=8)
-
-        # (在 __init__ 函数的背景故事输入框的逻辑后面加入这块代码：)
-
-        # ---- 营业期限 ----
+        # ---- 3. 营业期限 ----
         outer, card = Card(inner)
         outer.pack(fill="x", pady=8)
 
@@ -2673,6 +2787,10 @@ class StoreKeeperPage(tk.Frame):
         f_tick.pack(anchor="w", padx=18, pady=(0, 12))
         ttk.Entry(f_tick, textvariable=self.end_tick_var, width=8).pack(side="left")
         tk.Label(f_tick, text=" 旬", bg=COLORS["card"], fg=COLORS["text"], font=F_BODY).pack(side="left")
+
+        # ---- 4. 背景故事（必填） ----
+        outer, card = Card(inner)
+        outer.pack(fill="x", pady=8)
 
         tk.Label(card, text="店主背景故事（必填）",
                  bg=COLORS["card"], fg=COLORS["text"], font=F_SUB).pack(
@@ -2906,7 +3024,8 @@ class TalentPage(tk.Frame):
         m = self.app.mode_data()
         mode_tag = getattr(m, "TALENT_MODE_TAG", "Normal")
 
-        combined_pool = list(m.TALENT_POOL) + load_user_talents()
+        # 因为在 main.py 的头部，data 被 import data as normal_data
+        combined_pool = list(m.TALENT_POOL) + load_user_talents() + normal_data.CUSTOM_SCENARIO_TALENTS
 
         if is_test:
             # 测试模式：显示当前场景与模式下所有适用的天赋
@@ -3843,6 +3962,15 @@ class ConfirmPage(tk.Frame):
             for attr, mod in t.get("modifiers", []):
                 rolled = roll_dice(mod)
                 final[attr] = final.get(attr, 0) + rolled
+                
+                # --- 👇 NEW PATCH: Bound core stats up to 100 ---
+                if attr in m.ATTRIBUTES or attr == "LUCK":
+                    if final[attr] > 100:
+                        final[attr] = 100
+                    elif final[attr] < 1:  # Absolute floor just in case
+                        final[attr] = 1
+                # ------------------------------------------------
+
                 log.append(f"{t['name']}: {attr} {mod} → {rolled:+d}")
 
         c["final_attributes"] = final
@@ -4689,6 +4817,18 @@ class GamePage(tk.Frame):
     def get_formatted_header(self):
         c = self.app.character
         m = self.app.mode_data()
+
+                # ==== NEW: 通马桶模式专属时间显示，防止出现“岁”和“年” ====
+        if c.get("content_mode") == CONTENT_STORE:
+            if not c.get("adv_flex_time"):
+                return m.format_history_header(c)
+            else:
+                tick = m.get_time_tick(c)
+                days = m.get_character_age(c)
+                days_display = f"{float(days):.2f}".rstrip("0").rstrip(".")
+                return f"第{int(tick)}回合，店铺已营业 {days_display} 天"
+        # ==========================================================
+
 
         # 如果没有开启高级时间，走原版逻辑
         if not c.get("adv_flex_time"):
@@ -5740,7 +5880,7 @@ JSON输出格式：（严格 JSON，只输出 JSON）
 
         if rnd == 2:
             c["store_round"] = 3
-            self.append_history("\n" + m.format_history_header(c), "year")
+            self.append_history("\n" + self.get_formatted_header(), "year")
             if start_logs:
                 self.append_history(f"　〔{' / '.join(start_logs)}〕", "adj")
             self.append_history("　这一旬风平浪静。请决定你今后的命运。")
@@ -5751,7 +5891,7 @@ JSON输出格式：（严格 JSON，只输出 JSON）
         # ========================================================
         # rnd >= 3 正常循环：新的麻烦判定链 (HEAT -> MYST -> REPT/INTE + HMR)
         # ========================================================
-        self.append_history("\n" + m.format_history_header(c), "year")
+        self.append_history("\n" + self.get_formatted_header(), "year")
         if start_logs:
             self.append_history(f"　〔{' / '.join(start_logs)}〕", "adj")
 
@@ -5799,14 +5939,14 @@ JSON输出格式：（严格 JSON，只输出 JSON）
                     trouble_hits = True
 
         if trouble_hits:
-            # 将处理权交给 AI
-            self.trigger_store_event("k", [])
+            # 将处理权交给 AI，不打印重复头部
+            self.trigger_store_event("k",[], add_header=False)
             return
 
         # 如果没遇到麻烦，或者成功化解了麻烦，才判断这旬有没有委托
         if random.random() < c.get("event_chance", 0.5):
             kind = m.roll_event_kind(c) # 抽取新客户(n)或老客户(l)
-            self.trigger_store_event(kind, [])
+            self.trigger_store_event(kind,[], add_header=False)
         else:
             self.append_history("　风平浪静......你可以自由进行行动。")
             self.refresh_panel()
@@ -5843,7 +5983,7 @@ JSON输出格式：（严格 JSON，只输出 JSON）
         })
         self.show_next_button()
 
-    def trigger_store_event(self, kind, start_logs):
+    def trigger_store_event(self, kind, start_logs, add_header=False):
         c = self.app.character
         m = self.app.mode_data()
 
@@ -5855,7 +5995,7 @@ JSON输出格式：（严格 JSON，只输出 JSON）
                 self.set_loading(f"{client.get('name','某位')} 熟客来访……")
                 self.send_to_ai(
                     m.build_event_prompt(c, "l", client=client),
-                    lambda d: self.on_store_event_response(d, start_logs, expected_client=client),
+                    lambda d: self.on_store_event_response(d, start_logs, expected_client=client, add_header=add_header),
                 )
                 return
 
@@ -5869,28 +6009,30 @@ JSON输出格式：（严格 JSON，只输出 JSON）
             self.set_loading("时光在店里慢慢流淌……")
             prompt = m.build_event_prompt(c, "quiet")
 
-        self.send_to_ai(prompt, lambda d: self.on_store_event_response(d, start_logs))
+        self.send_to_ai(prompt, lambda d: self.on_store_event_response(d, start_logs, add_header=add_header))
 
-    def on_store_event_response(self, data, start_logs=None, expected_client=None):
+    # 修改后：
+    def on_store_event_response(self, data, start_logs=None, expected_client=None, add_header=False):
         c = self.app.character
-        start_logs = start_logs or []
+        start_logs = start_logs or[]
 
-        self.apply_event(data, add_header=True, pre_logs=start_logs)
+        self.apply_event(data, add_header=add_header, pre_logs=start_logs)
 
         if not c.get("alive", True):
             self.handle_death()
             return
 
+        # 新增：路由分发商店事件
         se = data.get("store_event") or {}
-        kind = se.get("kind", "none")
+        kind = se.get("kind")
 
         if kind == "new_client":
             self.handle_new_client_event(se, data)
         elif kind == "old_client":
-            self.handle_old_client_event(se, data, expected_client=expected_client)
+            self.handle_old_client_event(se, data, expected_client)
         elif kind == "trouble":
             self.handle_trouble_event(se, data)
-        else:  # quiet / none / resolution etc
+        else:
             if data.get("has_choice"):
                 self.show_store_choices(data.get("choices") or {}, allow_reject=False)
             else:
@@ -6109,7 +6251,7 @@ JSON输出格式：（严格 JSON，只输出 JSON）
         self.set_loading("正在分析你的行动……")
         self.send_action_check(text)
 
-    def send_action_check_normal(self, action_text):
+    def send_action_check(self, action_text):   # <--- 改名
         """普通/性压抑模式：先问 AI 用什么属性，再投骰子。"""
         c = self.app.character
         m = self.app.mode_data()
@@ -6143,7 +6285,7 @@ JSON输出格式：（严格 JSON，只输出 JSON）
                 data = parse_ai_json(resp.choices[0].message.content)
                 checks = data.get("checks") or[]
                 difficulty = data.get("difficulty") or "normal"
-                self.after(0, lambda: self.execute_normal_custom_action(action_text, checks, difficulty))
+                self.after(0, lambda: self.execute_custom_action(action_text, checks, difficulty))
             except Exception as e:
                 err = str(e)
                 def fallback():
@@ -6165,14 +6307,18 @@ JSON输出格式：（严格 JSON，只输出 JSON）
 
         com_id = c.get("_active_commission_id")
         advantage_override = None
+
+        # 修改后：
         if com_id and com_id in c.get("store_commissions", {}):
             com = c["store_commissions"][com_id]
             if com.get("pending_advantage"):
                 advantage_override = "advantage"
                 com["pending_advantage"] = False
-                checks = self.filter_valid_checks(checks) # <--- 新增这一行
-                if not checks:
-                    checks =["INT"]
+
+        # 必须独立于 if 块之外
+        checks = self.filter_valid_checks(checks) 
+        if not checks:
+            checks = ["INT"]
 
         check_results = []
         for attr in checks:

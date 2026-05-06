@@ -58,6 +58,15 @@ SCENES = [
     {"id": "warrior", "name": "唐宋江湖", "scenario_tag": "loneblade",
      "has_edu": False,
      "desc": "醉饮浩荡英雄气，餐尽九洲快哉风。"},
+    {"id": "1920s", "name": "传奇一代", "scenario_tag": "betweentheworlds",
+     "has_edu": False,
+     "desc": "两次大战之间的1920s，表面平静，暗流涌动。"},
+    {"id": "1920s_cn", "name": "传奇一代（CN）", "scenario_tag": "distantshore",
+     "has_edu": False,
+     "desc": "北洋时代。军阀；革命党；戴着眼镜的学生；求神拜佛的农民。"},
+     {"id": "fallout", "name": "末日之后", "scenario_tag": "dyingamber",
+     "has_edu": False,
+     "desc": "这个世界正在死去，但她的孩子们还活着；地铁中文明的火种依然燃烧。"},
     {"id": "custom",  "name": "自定义世界", "scenario_tag": "citywalk",
      "has_edu": False,    # 默认无义务教育，由 UI toggle 决定
      "desc": "由你描述的世界设定，AI将为你量身打造。"},
@@ -575,6 +584,13 @@ TALENT_POOL = [
     # 通用一点的（健身爱好者、平平无奇等），加上：
     #   "mode": "Normal", "scenarios": ["any"],
 ]
+
+import betweentheworlds_sc
+TALENT_POOL.extend(betweentheworlds_sc.TALENT_POOL_NORMAL)
+import distantshore_sc
+TALENT_POOL.extend(distantshore_sc.TALENT_POOL_NORMAL)
+import fallout_sc
+TALENT_POOL.extend(fallout_sc.TALENT_POOL_NORMAL)
 
 # ============================================================
 # 骰子
@@ -1183,3 +1199,49 @@ def build_resolution_prompt(c, action_summary, check_results, **kwargs):
 - 否则 has_choice=false。
 {extra_context}
 """
+
+# ------------------------------------------------------------
+# 自定义 JSON 剧本加载模块
+# ------------------------------------------------------------
+CUSTOM_SCENARIO_DIR = os.path.join(os.path.expanduser("~"), ".ai_life_remake_custom_scenarios")
+
+CUSTOM_SCENARIO_TALENTS = [] 
+
+def load_custom_json_scenarios():
+    global CUSTOM_SCENARIO_TALENTS, SCENES
+    CUSTOM_SCENARIO_TALENTS.clear()
+    
+    # 【关键】先清理掉内存中所有被打上 "_is_custom_json" 标记的剧本
+    # 防止删除文件后重新加载时，内存里依然残留着幽灵剧本
+    SCENES[:] = [s for s in SCENES if not s.get("_is_custom_json")]
+    
+    if not os.path.exists(CUSTOM_SCENARIO_DIR):
+        os.makedirs(CUSTOM_SCENARIO_DIR)
+        
+    for filename in os.listdir(CUSTOM_SCENARIO_DIR):
+        if filename.endswith(".json"):
+            filepath = os.path.join(CUSTOM_SCENARIO_DIR, filename)
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    
+                # 1. 挂载场景设定
+                sc_def = data.get("scenario_def")
+                if sc_def:
+                    # 给它打上标记，并记录文件名，方便以后删除
+                    sc_def["_is_custom_json"] = True
+                    sc_def["_json_filename"] = filename
+                    
+                    if not any(s["id"] == sc_def["id"] for s in SCENES):
+                        SCENES.append(sc_def)
+                        
+                # 2. 挂载专属天赋
+                talents = data.get("talents", [])
+                if talents:
+                    CUSTOM_SCENARIO_TALENTS.extend(talents)
+                    
+            except Exception as e:
+                print(f"[剧本加载失败] 无法加载 {filename}: {e}")
+
+# 执行自动加载
+load_custom_json_scenarios()

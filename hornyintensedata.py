@@ -1989,6 +1989,14 @@ TALENT_POOL = [
         "modifiers": [("POW", "+1d3*5"), ("APP", "+1d2*5"), ("END", "-1d3*5"), ("CRE", "-1d1*5")],
         "narrative": "三年内捡到两卷残功一颗内丹，也三年内死了两位师尊一个至交。"
     },]
+
+import betweentheworlds_sc
+TALENT_POOL.extend(betweentheworlds_sc.TALENT_POOL_INTENSE)
+import distantshore_sc
+TALENT_POOL.extend(distantshore_sc.TALENT_POOL_INTENSE)
+import fallout_sc
+TALENT_POOL.extend(fallout_sc.TALENT_POOL_INTENSE)
+
 # ============================================================
 # Skill Block Helper
 # ============================================================
